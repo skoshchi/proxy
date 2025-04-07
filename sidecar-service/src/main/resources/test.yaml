@@ -1,0 +1,12 @@
+serviceURL: http://localhost:8082/hotel
+startLRA: /start-order
+completeLRA: /process-success
+
+lra-proxy:
+  url: http://localhost:8082/hotel
+  start:
+    path: /start-order
+    method: GET
+    header:
+  complete:
+    path: /process-success
