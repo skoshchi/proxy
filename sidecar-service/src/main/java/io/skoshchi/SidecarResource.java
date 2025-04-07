@@ -1,7 +1,7 @@
 package main.java.io.skoshchi;
 
 import io.skoshchi.interfece.LraClient;
-import io.skoshchi.interfece.ProxyYamlConfigStructure;
+import io.skoshchi.yaml.LraProxyConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -21,7 +21,7 @@ import java.net.http.HttpResponse;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.yaml.snakeyaml.Yaml;
 
-@Path("/sidecar")
+@Path("")
 public class SidecarResource implements LraClient {
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
@@ -29,7 +29,7 @@ public class SidecarResource implements LraClient {
     @ConfigProperty(name = "proxy.config-path")
     private String configPath;
 
-    private ProxyYamlConfigStructure config;
+    private LraProxyConfig config;
 
     @PostConstruct
     public void init() {
@@ -40,7 +40,7 @@ public class SidecarResource implements LraClient {
     @Path("{path:.*}")
     public Response proxyGet(@PathParam("path") String path, @Context UriInfo uriInfo) {
         try {
-            String targetPath = config.getServiceURL() + path;
+            String targetPath = config.getLraProxy().getUrl() + "/" + path;
             URI targetUri = URI.create(targetPath);
 
             HttpRequest request = HttpRequest.newBuilder()
@@ -61,7 +61,7 @@ public class SidecarResource implements LraClient {
     @Override
     public Response startLRA(URI lraId) {
         niceStringOutput("start LRA");
-        return sendGetRequest(config.getStartLRA(), "Start LRA works");
+        return sendGetRequest("**Not done**", "Start LRA works");
     }
 
     /**
@@ -69,7 +69,7 @@ public class SidecarResource implements LraClient {
      */
     @Override
     public Response completeLRA(URI lraId) {
-        return sendGetRequest(config.getCompleteLRA(), "Complete LRA works");
+        return sendGetRequest("**Not done**", "Complete LRA works");
     }
 
     /**
@@ -93,10 +93,10 @@ public class SidecarResource implements LraClient {
         System.out.println("===========\n" + input + "\n===========");
     }
 
-    private ProxyYamlConfigStructure loadYamlConfig(String filePath) {
+    private LraProxyConfig loadYamlConfig(String filePath) {
         Yaml yaml = new Yaml();
         try (InputStream inputStream = new FileInputStream(new File(filePath))) {
-            return yaml.loadAs(inputStream, ProxyYamlConfigStructure.class);
+            return yaml.loadAs(inputStream, LraProxyConfig.class);
         } catch (FileNotFoundException e) {
             throw new RuntimeException("YAML not found: " + filePath, e);
         } catch (IOException e) {
@@ -112,7 +112,7 @@ public class SidecarResource implements LraClient {
      */
     private Response sendGetRequest(String pathSuffix, String successMessage) {
         try {
-            String targetUrl = config.getServiceURL() + pathSuffix;
+            String targetUrl = config.getLraProxy().getUrl() + pathSuffix;
             URI targetUri = URI.create(targetUrl);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(targetUri)
