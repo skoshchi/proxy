@@ -1,5 +1,6 @@
 package io.skoshchi;
 
+import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -9,6 +10,7 @@ import java.util.Random;
 
 @Path("/hotel")
 public class HotelResource {
+
 
     private OrderStatus orderStatus = OrderStatus.NOT_BOOKED;
 

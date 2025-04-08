@@ -1,8 +1,9 @@
 package main.java.io.skoshchi;
 
-import io.skoshchi.interfece.LraClient;
+import io.narayana.lra.client.internal.NarayanaLRAClient;
 import io.skoshchi.yaml.LraProxyConfig;
 import jakarta.annotation.PostConstruct;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -21,8 +22,10 @@ import java.net.http.HttpResponse;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.yaml.snakeyaml.Yaml;
 
-@Path("")
-public class SidecarResource implements LraClient {
+@Path("test")
+public class SidecarResource {
+    @Inject
+    NarayanaLRAClient narayanaLRAClient;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -55,39 +58,13 @@ public class SidecarResource implements LraClient {
         }
     }
 
-    /**
-        Sends request to HOTEL_SERVICE_URL + "start-order"
-     */
-    @Override
-    public Response startLRA(URI lraId) {
-        niceStringOutput("start LRA");
-        return sendGetRequest("**Not done**", "Start LRA works");
-    }
-
-    /**
-        Sends request to HOTEL_SERVICE_URL + "process-success"
-     */
-    @Override
-    public Response completeLRA(URI lraId) {
-        return sendGetRequest("**Not done**", "Complete LRA works");
-    }
-
-    /**
-        **Not done**
-     */
-    @Override
-    public Response compensateLRA(URI lraId) {
-        return Response.ok("**Not done**" + " Compensate LRA works").build();
-    }
-
     @GET
     @Path("/demo")
-    public Response demoLRAFlow(URI lraId) {
-        niceStringOutput(startLRA(lraId).toString());
-        niceStringOutput(compensateLRA(lraId).toString());
-
+    public Response demoLRAFlow(@Context UriInfo uriInfo) {
+        niceStringOutput("demo run");
         return Response.ok("Demo done").build();
     }
+
 
     private void niceStringOutput(String input) {
         System.out.println("===========\n" + input + "\n===========");
@@ -114,10 +91,12 @@ public class SidecarResource implements LraClient {
         try {
             String targetUrl = config.getLraProxy().getUrl() + pathSuffix;
             URI targetUri = URI.create(targetUrl);
-            HttpRequest request = HttpRequest.newBuilder()
+
+             HttpRequest request = HttpRequest.newBuilder()
                     .uri(targetUri)
                     .GET()
                     .build();
+
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return Response.ok(successMessage).build();
         } catch (Exception e) {
