@@ -13,4 +13,12 @@ public class LraProxyConfig {
    public void setLraProxy(LraProxy lraProxy) {
       this.lraProxy = lraProxy;
    }
+
+   public String getStartLRAUrl() {
+      return lraProxy.getUrl() + "/" + lraProxy.getServiceName() + "/" + lraProxy.getStart().getPath();
+   }
+
+   public String getCompleteLRAUrl() {
+      return lraProxy.getUrl() + "/" + lraProxy.getServiceName() + "/" + lraProxy.getComplete().getPath();
+   }
 }

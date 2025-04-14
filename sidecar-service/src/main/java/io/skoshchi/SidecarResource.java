@@ -16,13 +16,14 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.yaml.snakeyaml.Yaml;
 
-@Path("test")
+@Path("")
 public class SidecarResource {
     @Inject
     NarayanaLRAClient narayanaLRAClient;
@@ -34,6 +35,8 @@ public class SidecarResource {
 
     private LraProxyConfig config;
 
+    private URI parentLRA;
+
     @PostConstruct
     public void init() {
         config = loadYamlConfig(configPath);
@@ -42,25 +45,47 @@ public class SidecarResource {
     @GET
     @Path("{path:.*}")
     public Response proxyGet(@PathParam("path") String path, @Context UriInfo uriInfo) {
-        try {
-            String targetPath = config.getLraProxy().getUrl() + "/" + path;
-            URI targetUri = URI.create(targetPath);
+        String[] parts = path.split("/");
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(targetUri)
-                    .GET()
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            return Response.ok(response.body()).build();
-        } catch (IOException | InterruptedException e) {
-            return Response.ok("BAD").build();
+        if (parts.length != 2) {
+            return Response.ok("Wrong amount of parameters").build();
         }
+
+        // check the first param == hotel
+        String serviceName = config.getLraProxy().getServiceName();
+        String serviceUrl = parts[0];
+        String pathSuffix = parts[1];
+        if (serviceUrl.equals(serviceName)) {
+            String methodStartLIRA = config.getLraProxy().getStart().getPath();
+            String methodCompleteLIRA = config.getLraProxy().getComplete().getPath();
+
+            if (pathSuffix.equals(methodStartLIRA)) {
+                int status = sendGetRequest(pathSuffix, "Method mapped to LRA start is triggered").getStatus();
+                if (status == 200) {
+                    parentLRA = narayanaLRAClient.startLRA(null, serviceName, null, null);
+                    return Response.ok("Lra " + parentLRA + "should be started").build();
+                }
+            }
+
+            if (pathSuffix.equals(methodCompleteLIRA)) {
+                int status = sendGetRequest(pathSuffix, "Method mapped to LRA complete is triggered").getStatus();
+                if (status == 200) {
+                    narayanaLRAClient.closeLRA(parentLRA);
+                    return Response.ok("Lra " + parentLRA + "should be closed").build();
+                }
+            }
+            return sendGetRequest(pathSuffix, "Not mapped method triggered " + config.getLraProxy().getUrl() + "/" + pathSuffix);
+        }
+
+        return Response.ok("No such path in yaml").build();
     }
 
     @GET
     @Path("/demo")
-    public Response demoLRAFlow(@Context UriInfo uriInfo) {
+    public Response demoLRAFlow(@Context UriInfo uriInfo) throws URISyntaxException {
+        String clientId = "demo";
+        narayanaLRAClient.startLRA(null, clientId, 10L, null);
+
         niceStringOutput("demo run");
         return Response.ok("Demo done").build();
     }
@@ -89,7 +114,7 @@ public class SidecarResource {
      */
     private Response sendGetRequest(String pathSuffix, String successMessage) {
         try {
-            String targetUrl = config.getLraProxy().getUrl() + pathSuffix;
+            String targetUrl = config.getLraProxy().getUrl() + "/" + config.getLraProxy().getServiceName() + "/" + pathSuffix;
             URI targetUri = URI.create(targetUrl);
 
              HttpRequest request = HttpRequest.newBuilder()
@@ -98,6 +123,7 @@ public class SidecarResource {
                     .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            niceStringOutput(response.body());
             return Response.ok(successMessage).build();
         } catch (Exception e) {
             e.printStackTrace();
