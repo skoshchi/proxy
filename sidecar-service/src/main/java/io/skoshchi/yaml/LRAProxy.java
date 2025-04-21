@@ -6,9 +6,7 @@ public class LRAProxy {
     private String url;
     private String serviceName;
 
-    private List<LRAControls> lraControls;
-    private List<LRAMethods> lraMethods;
-
+    private List<LRAControl> lraControls;
 
     public LRAProxy() {
     }
@@ -29,21 +27,14 @@ public class LRAProxy {
         this.serviceName = serviceName;
     }
 
-    public List<LRAControls> getLraControls() {
+    public List<LRAControl> getLraControls() {
         return lraControls;
     }
 
-    public void setLraControls(List<LRAControls> lraControls) {
+    public void setLraControls(List<LRAControl> lraControls) {
         this.lraControls = lraControls;
     }
 
-    public List<LRAMethods> getLraMethods() {
-        return lraMethods;
-    }
-
-    public void setLraMethods(List<LRAMethods> lraMethods) {
-        this.lraMethods = lraMethods;
-    }
 
     @Override
     public String toString() {
@@ -51,7 +42,6 @@ public class LRAProxy {
                 "url='" + url + '\'' +
                 ", serviceName='" + serviceName + '\'' +
                 ", lraControls=" + lraControls +
-                ", lraMethods=" + lraMethods +
                 '}';
     }
 }

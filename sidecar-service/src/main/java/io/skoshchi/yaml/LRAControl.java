@@ -1,21 +1,13 @@
 package io.skoshchi.yaml;
 
-public class LRAMethods {
-    public enum MethodType {
-        Compensate,
-        Complete,
-        Status,
-        Forget,
-        AfterLRA
-    }
-
+public class LRAControl {
     private String name;
     private String path;
     private String method;
+    private LRASettings lraSettings;
     private MethodType lraMethod;
 
-
-    public LRAMethods() {
+    public LRAControl() {
     }
 
     public String getName() {
@@ -42,6 +34,14 @@ public class LRAMethods {
         this.method = method;
     }
 
+    public LRASettings getLraSettings() {
+        return lraSettings;
+    }
+
+    public void setLraSettings(LRASettings lraSettings) {
+        this.lraSettings = lraSettings;
+    }
+
     public MethodType getLraMethod() {
         return lraMethod;
     }
@@ -52,10 +52,11 @@ public class LRAMethods {
 
     @Override
     public String toString() {
-        return "LRAMethods{" +
+        return "LRAControls{" +
                 "name='" + name + '\'' +
                 ", path='" + path + '\'' +
                 ", method='" + method + '\'' +
+                ", lraSettings=" + lraSettings +
                 ", lraMethod=" + lraMethod +
                 '}';
     }

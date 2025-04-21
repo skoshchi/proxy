@@ -17,61 +17,62 @@ public class HotelResource {
     @GET
     @Path("/get-order-status")
     public Response getOrderStatus() {
-        niceStringOutput("Order status: " + orderStatus);
+        niceStringOutput("[get-order-status] Order status: " + orderStatus);
         return Response.ok(orderStatus).build();
     }
 
     @GET
     @Path("/start-order")
-    public Response startOrder() {
-        try {
-            Thread.sleep(2000);
-            orderStatus = OrderStatus.BOOKING;
-            niceStringOutput("Simulates the opening of transaction");
-        } catch (InterruptedException e ) {
-            e.printStackTrace();
-        }
-        return Response.ok(orderStatus).build();
-    }
-
-    @GET
-    @Path("/process-order")
-    public Response processOrder() {
-        if (ifPaidPass()) {
-            return processOrderSuccess();
-        } else {
-            return processOrderFail();
-        }
-    }
-
-    // payment can fail
-    private boolean ifPaidPass() {
-        Random rd = new Random();
-        return rd.nextBoolean();
+    public Response startOrder() throws InterruptedException {
+        Thread.sleep(1000);
+        orderStatus = OrderStatus.BOOKING;
+        niceStringOutput("[start-order] Booking started");
+        return Response.ok("Order started").build();
     }
 
     @GET
     @Path("/process-success")
-    public Response processOrderSuccess() {
-        try {
-            Thread.sleep(2000);
-            orderStatus = OrderStatus.BOOKED;
-            niceStringOutput("Success order");
-        } catch (InterruptedException e ) {
-            e.printStackTrace();
-        }
-        return Response.ok("Success order, LRA goes to complete").build();
+    public Response processOrderSuccess() throws InterruptedException {
+        Thread.sleep(1000);
+        orderStatus = OrderStatus.BOOKED;
+        niceStringOutput("[process-success] Order booked");
+        return Response.ok("Success").build();
     }
 
-    public Response processOrderFail() {
-        try {
-            Thread.sleep(2000);
-            orderStatus = OrderStatus.NOT_BOOKED;
-            niceStringOutput("Fail order");
-        } catch (InterruptedException e ) {
-            e.printStackTrace();
-        }
-        return Response.ok("Fail order, LRA goes to compensate").build();
+    @POST
+    @Path("/compensate-order")
+    public Response compensate() {
+        orderStatus = OrderStatus.NOT_BOOKED;
+        niceStringOutput("[Compensate] called by sidecar");
+        return Response.ok("Compensated").build();
+    }
+
+    @POST
+    @Path("/complete-order")
+    public Response complete() {
+        niceStringOutput("[Complete] called by sidecar");
+        return Response.ok("Completed").build();
+    }
+
+    @GET
+    @Path("/status-order")
+    public Response status() {
+        niceStringOutput("[Status] Order status: " + orderStatus);
+        return Response.ok(orderStatus.name()).build();
+    }
+
+    @POST
+    @Path("/forget-order")
+    public Response forget() {
+        niceStringOutput("[Forget] Cleanup complete");
+        return Response.ok("Forgotten").build();
+    }
+
+    @GET
+    @Path("/after-lra-order")
+    public Response afterLRA() {
+        niceStringOutput("[AfterLRA] Final callback received");
+        return Response.ok("AfterLRA handled").build();
     }
 
     private void niceStringOutput(String input) {
