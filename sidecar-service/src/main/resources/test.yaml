@@ -1,9 +1,37 @@
 lraProxy:
   url: http://localhost:8082
   serviceName: hotel
-  start:
-    path: start-order
-    method: GET
-  complete:
-    path: process-success
-    method: GET
+
+  lraControls:
+    - name : LRA1
+      path: start-order
+      method: GET
+      lraSettings:
+        type: REQUIRES_NEW
+        end: false
+
+  lraMethods:
+    - name: test1
+      path: compensate-order
+      method: POST
+      lraMethod: Compensate
+
+    - name: test2
+      path: complete-order
+      method: POST
+      lraMethod: Complete
+
+    - name: test3
+      path: status-order
+      method: GET
+      lraMethod: Status
+
+    - name: test4
+      path: forget-order
+      method: POST
+      lraMethod: Forget
+
+    - name: test5
+      path: after-lra-order
+      method: GET
+      lraMethod: AfterLRA

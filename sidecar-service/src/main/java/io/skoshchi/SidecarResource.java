@@ -1,12 +1,14 @@
-package main.java.io.skoshchi;
+package io.skoshchi;
 
 import io.narayana.lra.client.internal.NarayanaLRAClient;
-import io.skoshchi.yaml.LraProxyConfig;
+import io.skoshchi.yaml.LRAProxyConfigFile;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.core.Configuration;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -21,6 +23,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
 import org.yaml.snakeyaml.Yaml;
 
 @Path("")
@@ -31,9 +34,11 @@ public class SidecarResource {
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @ConfigProperty(name = "proxy.config-path")
-    private String configPath;
+    public String configPath;
+    @Inject
+    Configuration configuration;
 
-    private LraProxyConfig config;
+    private LRAProxyConfigFile config;
 
     private URI parentLRA;
 
@@ -52,41 +57,43 @@ public class SidecarResource {
         }
 
         // check the first param == hotel
-        String serviceName = config.getLraProxy().getServiceName();
-        String serviceUrl = parts[0];
-        String pathSuffix = parts[1];
-        if (serviceUrl.equals(serviceName)) {
-            String methodStartLIRA = config.getLraProxy().getStart().getPath();
-            String methodCompleteLIRA = config.getLraProxy().getComplete().getPath();
-
-            if (pathSuffix.equals(methodStartLIRA)) {
-                int status = sendGetRequest(pathSuffix, "Method mapped to LRA start is triggered").getStatus();
-                if (status == 200) {
-                    parentLRA = narayanaLRAClient.startLRA(null, serviceName, null, null);
-                    return Response.ok("Lra " + parentLRA + "should be started").build();
-                }
-            }
-
-            if (pathSuffix.equals(methodCompleteLIRA)) {
-                int status = sendGetRequest(pathSuffix, "Method mapped to LRA complete is triggered").getStatus();
-                if (status == 200) {
-                    narayanaLRAClient.closeLRA(parentLRA);
-                    return Response.ok("Lra " + parentLRA + "should be closed").build();
-                }
-            }
-            return sendGetRequest(pathSuffix, "Not mapped method triggered " + config.getLraProxy().getUrl() + "/" + pathSuffix);
-        }
+//        String serviceName = config.getServiceName();
+//        String serviceUrl = parts[0];
+//        String pathSuffix = parts[1];
+//        if (serviceUrl.equals(serviceName)) {
+//            String methodStartLIRA = config.getLraProxy().getStart().getPath();
+//            String methodCompleteLIRA = config.getLraProxy().getComplete().getPath();
+//
+//            if (pathSuffix.equals(methodStartLIRA)) {
+//                int status = sendGetRequest(pathSuffix, "Method mapped to LRA start is triggered").getStatus();
+//                if (status == 200) {
+//                    parentLRA = narayanaLRAClient.startLRA(null, serviceName, null, null);
+//                    return Response.ok("Lra " + parentLRA + "should be started").build();
+//                }
+//            }
+//
+//            if (pathSuffix.equals(methodCompleteLIRA)) {
+//                int status = sendGetRequest(pathSuffix, "Method mapped to LRA complete is triggered").getStatus();
+//                if (status == 200) {
+//                    narayanaLRAClient.closeLRA(parentLRA);
+//                    return Response.ok("Lra " + parentLRA + "should be closed").build();
+//                }
+//            }
+//            return sendGetRequest(pathSuffix, "Not mapped method triggered " + config.getLraProxy().getUrl() + "/" + pathSuffix);
+//        }
 
         return Response.ok("No such path in yaml").build();
     }
 
     @GET
     @Path("/demo")
-    public Response demoLRAFlow(@Context UriInfo uriInfo) throws URISyntaxException {
+    public Response demoLRAFlow(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
         String clientId = "demo";
+
         narayanaLRAClient.startLRA(null, clientId, 10L, null);
 
         niceStringOutput("demo run");
+        niceStringOutput(config.toString());
         return Response.ok("Demo done").build();
     }
 
@@ -95,10 +102,10 @@ public class SidecarResource {
         System.out.println("===========\n" + input + "\n===========");
     }
 
-    private LraProxyConfig loadYamlConfig(String filePath) {
+    private LRAProxyConfigFile loadYamlConfig(String filePath) {
         Yaml yaml = new Yaml();
         try (InputStream inputStream = new FileInputStream(new File(filePath))) {
-            return yaml.loadAs(inputStream, LraProxyConfig.class);
+            return yaml.loadAs(inputStream, LRAProxyConfigFile.class);
         } catch (FileNotFoundException e) {
             throw new RuntimeException("YAML not found: " + filePath, e);
         } catch (IOException e) {
