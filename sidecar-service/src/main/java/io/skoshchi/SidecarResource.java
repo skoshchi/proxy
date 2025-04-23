@@ -46,12 +46,12 @@ public class SidecarResource {
     Configuration configuration;
 
     private LRAProxyConfigFile config;
-
-    private URI currentLRAURI;
+    private Map<String, LRAControl> controlsByPath = new HashMap<>();
 
     @PostConstruct
     public void init() {
         config = loadYamlConfig(configPath);
+        controlsByPath = getControlsByPath();
     }
 
     @Context
@@ -132,8 +132,7 @@ public class SidecarResource {
 
         niceStringOutput("demo run");
         niceStringOutput(config.toString());
-        niceStringOutput(getControlsByPath().toString());
-        return Response.ok("Demo done").build();
+        return Response.ok(controlsByPath).build();
     }
 
 
