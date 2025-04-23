@@ -2,6 +2,7 @@ package io.skoshchi;
 
 import io.narayana.lra.AnnotationResolver;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
+import io.narayana.lra.filter.ServerLRAFilter;
 import io.skoshchi.yaml.LRAControl;
 import io.skoshchi.yaml.LRAProxyConfigFile;
 import io.skoshchi.yaml.MethodType;
@@ -25,7 +26,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
+import java.util.*;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
@@ -58,8 +59,9 @@ public class SidecarResource {
 
     @GET
     @Path("{path:.*}")
-    public Response proxyGet(@PathParam("path") String path) {
+    public Response proxyGet(@PathParam("path") String path, @HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
         String[] parts = path.split("/");
+
         if (parts.length != 2) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity("Expected path format: /{service}/{method}").build();
@@ -72,15 +74,15 @@ public class SidecarResource {
             return Response.status(Response.Status.BAD_REQUEST).entity("Unknown service: " + serviceName).build();
         }
 
-        LRAControl lraMethods = config.getLraProxy().getLraControls().get(0);
+        LRAControl lraMethod = config.getLraProxy().getLraControls().get(0);
         Method method = resourceInfo.getResourceMethod();
-        LRA.Type type = lraMethods.getLraSettings().getType();
+        String lraName = lraMethod.getName();
+
+        LRA.Type type = lraMethod.getLraSettings().getType();
         LRA transactional = AnnotationResolver.resolveAnnotation(LRA.class, method);
 
-        // doesn't look good
-        URI lraId = currentLRAURI;
         URI newLRA = null;
-        Long timeout = lraMethods.getLraSettings().getTimeLimit();
+        Long timeout = lraMethod.getLraSettings().getTimeLimit();
 
         URI suspendedLRA = null;
         URI incomingLRA = null;
@@ -88,16 +90,30 @@ public class SidecarResource {
         boolean isLongRunning = false;
         boolean requiresActiveLRA = false;
 
-        boolean end = lraMethods.getLraSettings().isEnd();
-        String LRAname = lraMethods.getName();
-        ChronoUnit unit = lraMethods.getLraSettings().getTimeUnit();
+        boolean end = lraMethod.getLraSettings().isEnd();
+        String LRAname = lraMethod.getName();
+        ChronoUnit unit = lraMethod.getLraSettings().getTimeUnit();
         String callPath = methodName;
+        ArrayList<Progress> progress = null;
 
         try {
             switch (type) {
                 case REQUIRES_NEW:
-                    lraId = narayanaLRAClient.startLRA(null, LRAname, timeout, unit);
+                    suspendedLRA = incomingLRA;
+
+                    if (progress == null) {
+                        progress = new ArrayList<>();
+                    }
+                    newLRA = lraId = narayanaLRAClient.startLRA(null, lraName, timeout, unit);
+
+                    if (newLRA == null) {
+                        // startLRA will have called abortWith on the request context
+                        // the failure and any previous actions (the leave request) will be reported via the response filter
+                        return Response.ok("Failed to start LRA").build();
+                    }
                     break;
+                    default:
+                        lraId = incomingLRA;
             }
 
             return sendGetRequest(callPath, "Proxy with LRA: " + lraId);
@@ -113,10 +129,10 @@ public class SidecarResource {
     public Response demoLRAFlow(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
         String clientId = "demo";
 
-        narayanaLRAClient.startLRA(null, clientId, 10L, null);
 
         niceStringOutput("demo run");
         niceStringOutput(config.toString());
+        niceStringOutput(getControlsByPath().toString());
         return Response.ok("Demo done").build();
     }
 
@@ -224,5 +240,84 @@ public class SidecarResource {
                     .entity("Error during request: " + e.getMessage())
                     .build();
         }
+    }
+
+    // the request filter may perform multiple and in failure scenarios the LRA may be left in an ambiguous state:
+    // the following structure is used to track progress so that such failures can be reported in the response
+    // filter processing
+    private enum ProgressStep {
+        Left ("leave succeeded"),
+        LeaveFailed("leave failed"),
+        Started("start succeeded"),
+        StartFailed("start failed"),
+        Joined("join succeeded"),
+        JoinFailed("join failed"),
+        Ended("end succeeded"),
+        CloseFailed("close failed"),
+        CancelFailed("cancel failed");
+
+        final String status;
+
+        ProgressStep(final String status) {
+            this.status = status;
+        }
+
+        @Override
+        public String toString() {
+            return status;
+        }
+    }
+
+
+    // list of steps (both successful and unsuccessful) performed so far by the request and response filter
+    // and is used for error reporting
+    private static class Progress {
+        static EnumSet<ProgressStep> failures = EnumSet.of(
+                ProgressStep.LeaveFailed,
+                ProgressStep.StartFailed,
+                ProgressStep.JoinFailed,
+                ProgressStep.CloseFailed,
+                ProgressStep.CancelFailed);
+
+        ProgressStep progress;
+        String reason;
+
+        public Progress(ProgressStep progress, String reason) {
+            this.progress = progress;
+            this.reason = reason;
+        }
+
+        public boolean wasSuccessful() {
+            return !failures.contains(progress);
+        }
+    }
+
+    /**
+     * Creates a map of all LRA controls defined in the YAML configuration,
+     * by their value {@code path}.
+     *
+     * <p>Each key in the resulting {@link Map} represents an endpoint,
+     * specified in the {@code path} field inside the {@link LRAControl} element, and the value
+     * is the corresponding {@link LRAControl} containing all the necessary data
+     * for LRA management.</p>
+     *
+     * <p>If {@code config}, {@code config.getLraProxy()} and the list {@code getLraControls()} is equal to {@code null},
+     * then an empty card will be returned.</p>
+     *
+     * @return a map where the key is {@code path} and the value is the {@link LRAControl} object
+     * */
+    private Map<String, LRAControl> getControlsByPath() {
+        Map<String, LRAControl> controlsByPath = new HashMap<>();
+
+        if (config != null && config.getLraProxy() != null && config.getLraProxy().getLraControls() != null) {
+            for (LRAControl control : config.getLraProxy().getLraControls()) {
+                if (control.getPath() != null) {
+                    controlsByPath.put(control.getPath(), control);
+                }
+            }
+            return controlsByPath;
+        }
+
+        return null;
     }
 }

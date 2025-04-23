@@ -9,6 +9,6 @@ lraProxy:
         type: REQUIRES_NEW
         end: false
     - name: complete-test
-      path: process-success"
+      path: process-success
       method: GET
       lraMethod: Complete
