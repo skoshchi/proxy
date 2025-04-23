@@ -1,8 +1,6 @@
 package io.skoshchi;
 
-import io.narayana.lra.AnnotationResolver;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
-import io.narayana.lra.filter.ServerLRAFilter;
 import io.skoshchi.yaml.LRAControl;
 import io.skoshchi.yaml.LRAProxyConfigFile;
 import io.skoshchi.yaml.MethodType;
@@ -12,7 +10,6 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.container.ResourceInfo;
 import jakarta.ws.rs.core.*;
 
 import java.io.File;
@@ -20,7 +17,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -54,46 +50,33 @@ public class SidecarResource {
         controlsByPath = getControlsByPath();
     }
 
-    @Context
-    protected ResourceInfo resourceInfo;
-
     @GET
     @Path("{path:.*}")
     public Response proxyGet(@PathParam("path") String path, @HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
         String[] parts = path.split("/");
+        String lastPath = parts.length > 0 ? parts[parts.length - 1] : path;
 
-        if (parts.length != 2) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity("Expected path format: /{service}/{method}").build();
+        if (!controlsByPath.containsKey(lastPath)) {
+            String message = "Path '" + lastPath + "' not found in YAML configuration.";
+            niceStringOutput(message);
+            return Response.status(Response.Status.NOT_FOUND).entity(message).build();
         }
 
-        String serviceName = parts[0];
-        String methodName = parts[1];
+        LRAControl lraControl = controlsByPath.get(lastPath);
+        String lraName = lraControl.getName();
 
-        if (!serviceName.equals(config.getLraProxy().getServiceName())) {
-            return Response.status(Response.Status.BAD_REQUEST).entity("Unknown service: " + serviceName).build();
-        }
-
-        LRAControl lraMethod = config.getLraProxy().getLraControls().get(0);
-        Method method = resourceInfo.getResourceMethod();
-        String lraName = lraMethod.getName();
-
-        LRA.Type type = lraMethod.getLraSettings().getType();
-        LRA transactional = AnnotationResolver.resolveAnnotation(LRA.class, method);
+        LRA.Type type = lraControl.getLraSettings().getType();
+        Long timeout = lraControl.getLraSettings().getTimeLimit();
+        ChronoUnit timeUnit = lraControl.getLraSettings().getTimeUnit();
+        boolean end = lraControl.getLraSettings().isEnd();
+        List<Response.Status.Family> cancelOnFamily = lraControl.getLraSettings().getCancelOnFamily();
 
         URI newLRA = null;
-        Long timeout = lraMethod.getLraSettings().getTimeLimit();
-
         URI suspendedLRA = null;
         URI incomingLRA = null;
         URI recoveryUrl;
         boolean isLongRunning = false;
         boolean requiresActiveLRA = false;
-
-        boolean end = lraMethod.getLraSettings().isEnd();
-        String LRAname = lraMethod.getName();
-        ChronoUnit unit = lraMethod.getLraSettings().getTimeUnit();
-        String callPath = methodName;
         ArrayList<Progress> progress = null;
 
         try {
@@ -104,7 +87,7 @@ public class SidecarResource {
                     if (progress == null) {
                         progress = new ArrayList<>();
                     }
-                    newLRA = lraId = narayanaLRAClient.startLRA(null, lraName, timeout, unit);
+                    newLRA = lraId = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
 
                     if (newLRA == null) {
                         // startLRA will have called abortWith on the request context
@@ -116,7 +99,7 @@ public class SidecarResource {
                         lraId = incomingLRA;
             }
 
-            return sendGetRequest(callPath, "Proxy with LRA: " + lraId);
+            return sendGetRequest(lastPath, "Proxy with LRA: " + lraId);
 
         } catch (Exception e) {
             return Response.serverError().entity("LRA processing error: " + e.getMessage()).build();
@@ -127,12 +110,13 @@ public class SidecarResource {
     @GET
     @Path("/demo")
     public Response demoLRAFlow(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
-        String clientId = "demo";
-
+        String test = "hotel/status-order";
+        String[] parts = test.split("/");
+        String lastPath = parts.length > 0 ? parts[parts.length - 1] : test;
 
         niceStringOutput("demo run");
         niceStringOutput(config.toString());
-        return Response.ok(controlsByPath).build();
+        return Response.ok(lastPath).build();
     }
 
 
