@@ -22,8 +22,17 @@ public class HotelResource {
     }
 
     @GET
-    @Path("/start-order")
-    public Response startOrder() throws InterruptedException {
+    @Path("/start-order-1")
+    public Response startOrder1() throws InterruptedException {
+        Thread.sleep(1000);
+        orderStatus = OrderStatus.BOOKING;
+        niceStringOutput("[start-order] Booking started");
+        return Response.ok("Order started").build();
+    }
+
+    @GET
+    @Path("/start-order-2")
+    public Response startOrder2() throws InterruptedException {
         Thread.sleep(1000);
         orderStatus = OrderStatus.BOOKING;
         niceStringOutput("[start-order] Booking started");

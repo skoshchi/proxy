@@ -1,15 +1,18 @@
 package io.skoshchi;
 
+import io.narayana.lra.AnnotationResolver;
+import io.narayana.lra.Current;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
+import io.narayana.lra.filter.ServerLRAFilter;
+import io.narayana.lra.logging.LRALogger;
 import io.skoshchi.yaml.LRAControl;
 import io.skoshchi.yaml.LRAProxyConfigFile;
 import io.skoshchi.yaml.MethodType;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.HeaderParam;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.*;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ResourceInfo;
 import jakarta.ws.rs.core.*;
 
 import java.io.File;
@@ -17,19 +20,29 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.lra.annotation.AfterLRA;
 import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
+import org.eclipse.microprofile.lra.annotation.ws.rs.Leave;
 import org.yaml.snakeyaml.Yaml;
+
+import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.*;
+import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.Type.NESTED;
 
 @Path("")
 public class SidecarResource {
+    private static final String ABORT_WITH_PROP = "abortWith";
+
     @Inject
     NarayanaLRAClient narayanaLRAClient;
 
@@ -38,8 +51,6 @@ public class SidecarResource {
     @ConfigProperty(name = "proxy.config-path")
     public String configPath;
 
-    @Inject
-    Configuration configuration;
 
     private LRAProxyConfigFile config;
     private Map<String, LRAControl> controlsByPath = new HashMap<>();
@@ -50,73 +61,212 @@ public class SidecarResource {
         controlsByPath = getControlsByPath();
     }
 
+    @Context
+    protected ResourceInfo resourceInfo;
+
+    // KEK CHEBUREK!
+    // FIX it PLZ
+//    private URI lraId;
+
     @GET
     @Path("{path:.*}")
-    public Response proxyGet(@PathParam("path") String path, @HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
-        String[] parts = path.split("/");
-        String lastPath = parts.length > 0 ? parts[parts.length - 1] : path;
+    @LRA(value = LRA.Type.SUPPORTS, end = true)
+    public Response proxyGet(@PathParam("path") String fullPath,
+//                             @HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId,
+//                             @HeaderParam(LRA_HTTP_ENDED_CONTEXT_HEADER) URI endedLRAId,
+//                             @HeaderParam(LRA.LRA_HTTP_PARENT_CONTEXT_HEADER) URI parentLraId,
+//                             @HeaderParam(LRA_HTTP_RECOVERY_HEADER) URI recoveryUrl,
+                                ContainerRequestContext containerRequestContext
+                             ) {
+        String[] parts = fullPath.split("/");
+        String pathSuffix = parts.length > 0 ? parts[parts.length - 1] : fullPath;
 
-        if (!controlsByPath.containsKey(lastPath)) {
-            String message = "Path '" + lastPath + "' not found in YAML configuration.";
+        if (!controlsByPath.containsKey(pathSuffix)) {
+            String message = "Path '" + pathSuffix + "' not found in YAML configuration.";
             niceStringOutput(message);
             return Response.status(Response.Status.NOT_FOUND).entity(message).build();
         }
-
-        LRAControl lraControl = controlsByPath.get(lastPath);
+        MultivaluedMap<String, String> headers = containerRequestContext.getHeaders();
+        LRAControl lraControl = controlsByPath.get(pathSuffix);
         String lraName = lraControl.getName();
 
         LRA.Type type = lraControl.getLraSettings().getType();
         Long timeout = lraControl.getLraSettings().getTimeLimit();
         ChronoUnit timeUnit = lraControl.getLraSettings().getTimeUnit();
         boolean end = lraControl.getLraSettings().isEnd();
-        List<Response.Status.Family> cancelOnFamily = lraControl.getLraSettings().getCancelOnFamily();
 
+        URI incomingLRA = null;
+        ArrayList<Progress> progress = null;
+        Method method = resourceInfo.getResourceMethod();
         URI newLRA = null;
         URI suspendedLRA = null;
-        URI incomingLRA = null;
-        URI recoveryUrl;
-        boolean isLongRunning = false;
+        URI lraId = null;
         boolean requiresActiveLRA = false;
-        ArrayList<Progress> progress = null;
+
+
+        if (headers.containsKey(LRA_HTTP_CONTEXT_HEADER)) {
+            try {
+                incomingLRA = new URI(Current.getLast(headers.get(LRA_HTTP_CONTEXT_HEADER)));
+            } catch (URISyntaxException e) {
+                String msg = String.format("header %s contains an invalid URL %s",
+                        LRA_HTTP_CONTEXT_HEADER, Current.getLast(headers.get(LRA_HTTP_CONTEXT_HEADER)));
+
+                abortWith(containerRequestContext, null, Response.Status.PRECONDITION_FAILED.getStatusCode(),
+                        msg, null);
+                return Response.ok("Error").build(); // user error, bail out
+            }
+
+            if (AnnotationResolver.isAnnotationPresent(Leave.class, method)) {
+                // leave the LRA
+                Map<String, String> terminateURIs = NarayanaLRAClient.getTerminationUris(
+                        resourceInfo.getResourceClass(), createUriPrefix(containerRequestContext), timeout);
+                String compensatorId = terminateURIs.get("Link");
+
+                if (compensatorId == null) {
+                    abortWith(containerRequestContext, incomingLRA.toASCIIString(),
+                            Response.Status.BAD_REQUEST.getStatusCode(),
+                            "Missing complete or compensate annotations", null);
+                    return Response.ok("Error").build(); // user error, bail out
+                }
+
+                progress = new ArrayList<>();
+
+                try {
+                    narayanaLRAClient.leaveLRA(incomingLRA, compensatorId);
+                    progress.add(new Progress(ProgressStep.Left, null)); // leave succeeded
+                } catch (WebApplicationException e) {
+                    progress.add(new Progress(ProgressStep.LeaveFailed, e.getMessage())); // leave may have failed
+                    return Response.ok("Error").build(); // user error, bail out
+
+                } catch (ProcessingException e) { // a remote coordinator was unavailable
+                    progress.add(new Progress(ProgressStep.LeaveFailed, e.getMessage())); // leave may have failed
+                    return Response.ok("Error").build(); // user error, bail out
+                }
+
+                // let the participant know which lra he left by leaving the header intact
+            }
+        }
+
+
+        // check the incoming request for an LRA context
+        if (!headers.containsKey(LRA_HTTP_CONTEXT_HEADER)) {
+            Object lraContext = containerRequestContext.getProperty(LRA_HTTP_CONTEXT_HEADER);
+
+            if (lraContext != null) {
+                incomingLRA = (URI) lraContext;
+            }
+        }
 
         try {
             switch (type) {
+                case NESTED:
+                    // FALLTHROUGH
+                case REQUIRED:
+                    if (incomingLRA != null) {
+                        if (type == NESTED) {
+                            headers.putSingle(LRA_HTTP_PARENT_CONTEXT_HEADER, incomingLRA.toASCIIString());
+
+                            // if there is an LRA present nest a new LRA under it
+                            suspendedLRA = incomingLRA;
+
+                            if (progress == null) {
+                                progress = new ArrayList<>();
+                            }
+
+                            newLRA = lraId = startLRA(containerRequestContext, incomingLRA, method, timeout, progress);
+
+                            if (newLRA == null) {
+                                // startLRA will have called abortWith on the request context
+                                // the failure plus any previous actions (the leave request) will be reported via the response filter
+                                return Response.ok("Error REQUIRED failed").build();
+                            }
+                        } else {
+                            lraId = incomingLRA;
+                            // incomingLRA will be resumed
+                            requiresActiveLRA = true;
+                        }
+
+                    } else {
+                        progress = new ArrayList<>();
+                        newLRA = lraId = startLRA(containerRequestContext, null, method, timeout, progress);
+
+                        if (newLRA == null) {
+                            // startLRA will have called abortWith on the request context
+                            // the failure and any previous actions (the leave request) will be reported via the response filter
+                            return Response.ok("Error REQUIRED failed").build();
+                        }
+
+//                        URI active = Current.peek();
+//                        if (active == null) {
+//                            lraId = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
+//                            niceStringOutput("Started new REQUIRED LRA: " + lraId);
+//                            narayanaLRAClient.setCurrentLRA(lraId);
+//                        } else {
+//                            lraId = narayanaLRAClient.startLRA(parentLraId, lraName, timeout, timeUnit);
+//                            niceStringOutput("Started REQUIRED LRA within parent: " + lraId);
+//                            narayanaLRAClient.setCurrentLRA(lraId);
+//                        }
+                    }
+                    break;
                 case REQUIRES_NEW:
                     suspendedLRA = incomingLRA;
 
                     if (progress == null) {
                         progress = new ArrayList<>();
                     }
-                    newLRA = lraId = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
+                    newLRA = lraId = startLRA(containerRequestContext, incomingLRA, method, timeout, progress);
 
                     if (newLRA == null) {
                         // startLRA will have called abortWith on the request context
                         // the failure and any previous actions (the leave request) will be reported via the response filter
-                        return Response.ok("Failed to start LRA").build();
+                        return Response.ok("Error REQUIRES_NEW failed").build();
                     }
+                    niceStringOutput("Started REQUIRES_NEW LRA: " + lraId);
                     break;
-                    default:
-                        lraId = incomingLRA;
             }
 
-            return sendGetRequest(lastPath, "Proxy with LRA: " + lraId);
+            Response result = sendGetRequest(pathSuffix, "I have send this message");
 
+            if (end && lraId != null) {
+                narayanaLRAClient.closeLRA(lraId);
+                niceStringOutput("Closed LRA after request: " + lraId);
+            }
+
+            return Response.ok("Proxy work done").build();
         } catch (Exception e) {
+            if (lraId != null) {
+                try {
+                    narayanaLRAClient.cancelLRA(lraId);
+                    niceStringOutput("Canceled LRA due to error: " + lraId);
+                } catch (Exception ex) {
+                    niceStringOutput("Failed to cancel LRA: " + ex.getMessage());
+                }
+            }
             return Response.serverError().entity("LRA processing error: " + e.getMessage()).build();
         }
     }
 
 
+    @PUT
+    @Path("/after")
+    @AfterLRA
+    public Response afterLRA(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
+        niceStringOutput("AfterLRA called for LRA: " + lraId + " with status: ");
+        return Response.ok().build();
+    }
+
     @GET
     @Path("/demo")
+    @LRA(LRA.Type.REQUIRES_NEW)
     public Response demoLRAFlow(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
         String test = "hotel/status-order";
         String[] parts = test.split("/");
         String lastPath = parts.length > 0 ? parts[parts.length - 1] : test;
 
         niceStringOutput("demo run");
-        niceStringOutput(config.toString());
-        return Response.ok(lastPath).build();
+        niceStringOutput(narayanaLRAClient.getCurrent().getPath());
+
+        return Response.ok(lraId).build();
     }
 
 
@@ -275,6 +425,73 @@ public class SidecarResource {
         }
     }
 
+    // the processing performed by the request filter caused the request to abort (without executing application code)
+    private void abortWith(ContainerRequestContext containerRequestContext, String lraId, int statusCode,
+                           String message, Collection<Progress> reasons) {
+        // the response filter will set the entity body
+        containerRequestContext.abortWith(Response.status(statusCode).entity(message).build());
+        // make the reason for the failure available to the response filter
+        containerRequestContext.setProperty(ABORT_WITH_PROP, reasons);
+
+        Method method = resourceInfo.getResourceMethod();
+        LRALogger.i18nLogger.warn_lraFilterContainerRequest(message,
+                method.getDeclaringClass().getName() + "#" + method.getName(),
+                lraId == null ? "context" : lraId);
+    }
+
+    private URI toURI(String uri) throws URISyntaxException {
+        return uri == null ? null : new URI(uri);
+    }
+
+    private String createUriPrefix(ContainerRequestContext containerRequestContext) {
+        return ConfigProvider.getConfig().getOptionalValue("narayana.lra.base-uri", String.class)
+                .orElseGet(() -> {
+                    UriInfo uriInfo = containerRequestContext.getUriInfo();
+
+                    /*
+                     * Calculate which path to prepend to the LRA participant methods. If there is more than one matching URI
+                     * then the second matched URI comes from either the class level Path annotation or from a sub-resource locator.
+                     * In both cases the second matched URI can be used as a prefix for the LRA participant URIs:
+                     */
+                    List<String> matchedURIs = uriInfo.getMatchedURIs();
+                    int matchedURI = (matchedURIs.size() > 1 ? 1 : 0);
+                    return uriInfo.getBaseUri() + matchedURIs.get(matchedURI);
+                });
+    }
+
+        private URI startLRA(ContainerRequestContext containerRequestContext, URI parentLRA, Method method, Long timeout,
+                ArrayList<Progress> progress) {
+            // timeout should already have been converted to milliseconds
+            String clientId = method.getDeclaringClass().getName() + "#" + method.getName();
+
+            try {
+                URI lra = narayanaLRAClient.startLRA(parentLRA, clientId, timeout, ChronoUnit.MILLIS, false);
+                updateProgress(progress, ProgressStep.Started, null);
+                return lra;
+            } catch (WebApplicationException e) {
+                String msg = e.getResponse().readEntity(String.class);
+
+                updateProgress(progress, ProgressStep.StartFailed, msg);
+            }
+
+            return null;
+        }
+
+    // add another step to the list of steps performed so far
+    private ArrayList<Progress> updateProgress(ArrayList<Progress> progress, ProgressStep step, String reason) {
+        if (reason == null) {
+            LRALogger.logger.debug(step.toString());
+        } else {
+
+            if (progress == null) {
+                progress = new ArrayList<>();
+            }
+
+            progress.add(new Progress(step, reason));
+        }
+
+        return progress;
+    }
     /**
      * Creates a map of all LRA controls defined in the YAML configuration,
      * by their value {@code path}.
