@@ -2,12 +2,18 @@ lraProxy:
   url: http://localhost:8082
   serviceName: hotel
   lraControls:
-    - name: LRA2
-      path: start-order
+    - name: LRA1
+      path: start-order-1
       method: GET
       lraSettings:
         type: REQUIRES_NEW
-        end: true
+        end: false
+    - name: LRA2
+      path: start-order-2
+      method: GET
+      lraSettings:
+        type: REQUIRED
+        end: false
     - name: complete-test
       path: process-success
       method: GET

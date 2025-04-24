@@ -1,5 +1,6 @@
 package io.skoshchi;
 
+import io.narayana.lra.Current;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
 import io.skoshchi.yaml.LRAControl;
 import io.skoshchi.yaml.LRAProxyConfigFile;
@@ -10,6 +11,10 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ContainerRequestFilter;
+import jakarta.ws.rs.container.ContainerResponseFilter;
+import jakarta.ws.rs.container.ContainerResponseContext;
 import jakarta.ws.rs.core.*;
 
 import java.io.File;
@@ -23,17 +28,24 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.logging.Logger;
 
+import jakarta.ws.rs.ext.Provider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.lra.annotation.AfterLRA;
 import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
 import org.yaml.snakeyaml.Yaml;
 
+import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.LRA_HTTP_CONTEXT_HEADER;
+
 @Path("")
-public class SidecarResource {
+@Provider
+public class SidecarResource implements ContainerRequestFilter, ContainerResponseFilter {
     @Inject
     NarayanaLRAClient narayanaLRAClient;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
+    private static final Logger logger = Logger.getLogger(SidecarResource.class.getName());
 
     @ConfigProperty(name = "proxy.config-path")
     public String configPath;
@@ -52,7 +64,8 @@ public class SidecarResource {
 
     @GET
     @Path("{path:.*}")
-    public Response proxyGet(@PathParam("path") String path, @HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
+    @LRA(value = LRA.Type.SUPPORTS, end = false)
+    public Response proxyGet(@PathParam("path") String path, @HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI incomingLRA) {
         String[] parts = path.split("/");
         String lastPath = parts.length > 0 ? parts[parts.length - 1] : path;
 
@@ -73,33 +86,42 @@ public class SidecarResource {
 
         URI newLRA = null;
         URI suspendedLRA = null;
-        URI incomingLRA = null;
         URI recoveryUrl;
         boolean isLongRunning = false;
         boolean requiresActiveLRA = false;
         ArrayList<Progress> progress = null;
 
+        URI activeLRA = null;
         try {
             switch (type) {
-                case REQUIRES_NEW:
-                    suspendedLRA = incomingLRA;
-
-                    if (progress == null) {
-                        progress = new ArrayList<>();
+                case REQUIRED:
+                    if (incomingLRA != null) {
+                        activeLRA = incomingLRA;
+                        niceStringOutput("Using incoming REQUIRED LRA: " + activeLRA);
+                    } else {
+                        activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
+                        niceStringOutput("Started new REQUIRED LRA: " + activeLRA);
                     }
-                    newLRA = lraId = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
-
-                    if (newLRA == null) {
-                        // startLRA will have called abortWith on the request context
-                        // the failure and any previous actions (the leave request) will be reported via the response filter
-                        return Response.ok("Failed to start LRA").build();
-                    }
+                    Current.push(activeLRA);
                     break;
-                    default:
-                        lraId = incomingLRA;
+
+                case REQUIRES_NEW:
+                    activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
+                    niceStringOutput("Started REQUIRES_NEW LRA: " + activeLRA);
+                    Current.push(activeLRA);
+                    break;
+
+                default:
+                    activeLRA = incomingLRA;
             }
 
-            return sendGetRequest(lastPath, "Proxy with LRA: " + lraId);
+            if (end && activeLRA != null) {
+                narayanaLRAClient.closeLRA(activeLRA);
+                niceStringOutput("Closed LRA after request: " + activeLRA);
+            }
+
+            niceStringOutput(sendGetRequest(lastPath, "Proxy with LRA: " + activeLRA).toString());
+            return Response.ok("Proxy process done").build();
 
         } catch (Exception e) {
             return Response.serverError().entity("LRA processing error: " + e.getMessage()).build();
@@ -109,7 +131,7 @@ public class SidecarResource {
 
     @GET
     @Path("/demo")
-    public Response demoLRAFlow(@HeaderParam(LRA.LRA_HTTP_CONTEXT_HEADER) URI lraId) {
+    public Response demoLRAFlow(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId) {
         String test = "hotel/status-order";
         String[] parts = test.split("/");
         String lastPath = parts.length > 0 ? parts[parts.length - 1] : test;
@@ -302,5 +324,37 @@ public class SidecarResource {
         }
 
         return null;
+    }
+
+    @Override
+    public void filter(ContainerRequestContext requestContext) throws IOException {
+        List<String> lraHeaders = requestContext.getHeaders().get(LRA_HTTP_CONTEXT_HEADER);
+
+        if (lraHeaders != null && !lraHeaders.isEmpty()) {
+            try {
+                URI lraId = new URI(lraHeaders.get(0));
+                logger.info("[LRA-Filter] Incoming LRA: " + lraId);
+                Current.push(lraId);
+            } catch (Exception e) {
+                logger.warning("[LRA-Filter] Failed to parse LRA header: " + lraHeaders);
+            }
+        }
+    }
+
+    @Override
+    public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext) throws IOException {
+        URI lra = Current.peek();
+
+        if (lra != null) {
+            logger.info("[LRA-Filter] Closing context for LRA: " + lra);
+            Current.pop();
+        }
+    }
+
+    @Path("/after-lra")
+    @GET
+    @AfterLRA
+    public Response afterLRA() {
+        return Response.ok().build();
     }
 }
