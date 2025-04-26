@@ -6,6 +6,7 @@ import io.skoshchi.yaml.LRAControl;
 import io.skoshchi.yaml.LRAProxyConfigFile;
 import io.skoshchi.yaml.MethodType;
 import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
@@ -40,12 +41,17 @@ import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.LRA_HTTP_CONTEXT
 
 @Path("")
 @Provider
+@ApplicationScoped
 public class SidecarResource implements ContainerRequestFilter, ContainerResponseFilter {
     @Inject
     NarayanaLRAClient narayanaLRAClient;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private static final Logger logger = Logger.getLogger(SidecarResource.class.getName());
+
+    // THIS IS BULLSHIT :/
+    private final Map<String, URI> activeLRAByClient = new HashMap<>();
+
 
     @ConfigProperty(name = "proxy.config-path")
     public String configPath;
@@ -64,36 +70,35 @@ public class SidecarResource implements ContainerRequestFilter, ContainerRespons
 
     @GET
     @Path("{path:.*}")
-    @LRA(value = LRA.Type.SUPPORTS, end = false)
-    public Response proxyGet(@PathParam("path") String path, @HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI incomingLRA) {
+    public Response proxyGet(@PathParam("path") String path,
+                             @Context ContainerRequestContext requestContext) {
         String[] parts = path.split("/");
         String lastPath = parts.length > 0 ? parts[parts.length - 1] : path;
 
         if (!controlsByPath.containsKey(lastPath)) {
-            String message = "Path '" + lastPath + "' not found in YAML configuration.";
-            niceStringOutput(message);
-            return Response.status(Response.Status.NOT_FOUND).entity(message).build();
+            return Response.status(Response.Status.NOT_FOUND).entity("Path not found").build();
         }
 
         LRAControl lraControl = controlsByPath.get(lastPath);
-        String lraName = lraControl.getName();
-
         LRA.Type type = lraControl.getLraSettings().getType();
         Long timeout = lraControl.getLraSettings().getTimeLimit();
         ChronoUnit timeUnit = lraControl.getLraSettings().getTimeUnit();
-        boolean end = lraControl.getLraSettings().isEnd();
-        List<Response.Status.Family> cancelOnFamily = lraControl.getLraSettings().getCancelOnFamily();
+        String lraName = lraControl.getName();
 
-        URI newLRA = null;
-        URI suspendedLRA = null;
-        URI recoveryUrl;
-        boolean isLongRunning = false;
-        boolean requiresActiveLRA = false;
-        ArrayList<Progress> progress = null;
-
+        URI incomingLRA = null;
         URI activeLRA = null;
+
         try {
+            String rawLRAHeader = requestContext.getHeaderString(LRA_HTTP_CONTEXT_HEADER);
+            if (rawLRAHeader != null && !rawLRAHeader.isEmpty()) {
+                incomingLRA = URI.create(rawLRAHeader);
+            }
+
             switch (type) {
+                case REQUIRES_NEW:
+                    activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
+                    niceStringOutput("Started new REQUIRES_NEW LRA: " + activeLRA);
+                    break;
                 case REQUIRED:
                     if (incomingLRA != null) {
                         activeLRA = incomingLRA;
@@ -102,32 +107,24 @@ public class SidecarResource implements ContainerRequestFilter, ContainerRespons
                         activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
                         niceStringOutput("Started new REQUIRED LRA: " + activeLRA);
                     }
-                    Current.push(activeLRA);
                     break;
-
-                case REQUIRES_NEW:
-                    activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
-                    niceStringOutput("Started REQUIRES_NEW LRA: " + activeLRA);
-                    Current.push(activeLRA);
-                    break;
-
                 default:
                     activeLRA = incomingLRA;
+                    break;
             }
 
-            if (end && activeLRA != null) {
-                narayanaLRAClient.closeLRA(activeLRA);
-                niceStringOutput("Closed LRA after request: " + activeLRA);
+            if (activeLRA != null) {
+                Current.push(activeLRA);
+                // Запоминаем LRA в свойства запроса, чтобы ответный фильтр его подхватил
+                requestContext.setProperty(LRA_HTTP_CONTEXT_HEADER, activeLRA.toASCIIString());
             }
 
-            niceStringOutput(sendGetRequest(lastPath, "Proxy with LRA: " + activeLRA).toString());
-            return Response.ok("Proxy process done").build();
+            return sendGetRequest(lastPath, "Proxy work done");
 
         } catch (Exception e) {
-            return Response.serverError().entity("LRA processing error: " + e.getMessage()).build();
+            return Response.serverError().entity("LRA error: " + e.getMessage()).build();
         }
     }
-
 
     @GET
     @Path("/demo")
@@ -211,10 +208,9 @@ public class SidecarResource implements ContainerRequestFilter, ContainerRespons
                 throw new RuntimeException(prefix + "Invalid 'lraMethod': " + control.getLraMethod());
             }
 
-
             if (hasSettings) {
                 if (control.getLraSettings().getType() == null) {
-                    throw new RuntimeException(prefix + "'lraSettings.type' must not be null");
+                    throw new RuntimeException(prefix + "lraSettings.type' must not be null");
                 }
             }
         });
@@ -343,18 +339,23 @@ public class SidecarResource implements ContainerRequestFilter, ContainerRespons
 
     @Override
     public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext) throws IOException {
-        URI lra = Current.peek();
+        Object activeLRA = requestContext.getProperty(LRA_HTTP_CONTEXT_HEADER);
 
-        if (lra != null) {
-            logger.info("[LRA-Filter] Closing context for LRA: " + lra);
-            Current.pop();
+        if (activeLRA != null) {
+            responseContext.getHeaders().putSingle(LRA_HTTP_CONTEXT_HEADER, activeLRA.toString());
+            niceStringOutput("Outgoing LRA Header set: " + activeLRA);
+        } else {
+            niceStringOutput("No LRA context to propagate.");
         }
+
+        Current.pop(); // Чистим стек в конце обработки
     }
 
-    @Path("/after-lra")
-    @GET
-    @AfterLRA
-    public Response afterLRA() {
-        return Response.ok().build();
-    }
+
+//    @Path("/after-lra")
+//    @GET
+//    @AfterLRA
+//    public Response afterLRA() {
+//        return Response.ok().build();
+//    }
 }
