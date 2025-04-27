@@ -107,6 +107,20 @@ public class HotelResource {
         return Response.ok("Mandatory LRA operation completed").build();
     }
 
+    @GET
+    @Path("/supports-order")
+    public Response supportsOrder() {
+        niceStringOutput("[supports-order] Running with or without LRA context (SUPPORTS)");
+        return Response.ok("Supports LRA operation completed").build();
+    }
+
+    @GET
+    @Path("/not-supported-order")
+    public Response notSupportedOrder() {
+        niceStringOutput("[not-supported-order] Running outside any LRA (NOT_SUPPORTED)");
+        return Response.ok("Not Supported LRA operation completed").build();
+    }
+
     private void niceStringOutput(String input) {
         System.out.println( "===========\n" +
                 input + "\n"    +

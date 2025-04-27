@@ -4,14 +4,12 @@ import io.narayana.lra.Current;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
 import io.skoshchi.yaml.LRAControl;
 import io.skoshchi.yaml.LRAProxyConfigFile;
-import io.skoshchi.yaml.MethodType;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.core.Configuration;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
@@ -25,14 +23,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-
-import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.LRA_HTTP_CONTEXT_HEADER;
-import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.LRA_HTTP_PARENT_CONTEXT_HEADER;
-import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.Type.NESTED;
 
 @Path("")
 @ApplicationScoped
@@ -45,9 +37,6 @@ public class SidecarResource {
 
     @ConfigProperty(name = "proxy.config-path")
     public String configPath;
-
-    @Inject
-    Configuration configuration;
 
     private LRAProxyConfigFile config;
     private Map<String, LRAControl> controlsByPath = new HashMap<>();
@@ -68,8 +57,6 @@ public class SidecarResource {
             return Response.status(Response.Status.NOT_FOUND).entity("Path not found").build();
         }
 
-        List<Object> fullContext = Current.getContexts();
-
         LRAControl lraControl = controlsByPath.get(lastPath);
         String lraName = lraControl.getName();
         LRA.Type type = lraControl.getLraSettings().getType();
@@ -83,6 +70,18 @@ public class SidecarResource {
 
         try {
             switch (type) {
+                case SUPPORTS:
+                    if (incomingLRA != null) {
+                        activeLRA = incomingLRA;
+                    } else {
+                        activeLRA = null;
+                    }
+                    break;
+
+                case NOT_SUPPORTED:
+                    activeLRA = null;
+                    break;
+
                 case NEVER:
                     if (incomingLRA != null) {
                         return Response.status(Response.Status.PRECONDITION_FAILED)
