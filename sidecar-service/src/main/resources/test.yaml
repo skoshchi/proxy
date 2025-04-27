@@ -19,9 +19,27 @@ lraProxy:
       method: GET
       lraMethod: Complete
 
-    - name: Start_Nested_Order
-      path: "start-nested-order"
+    - name: start_Nested_Order
+      path: start-nested-order
       method: "GET"
       lraSettings:
         type: NESTED
+        end: false
+
+    - name: start_Never_Order
+      path: never-order
+      method: "GET"
+      lraSettings:
+        type: NEVER
+        timeLimit: 0
+        timeUnit: MILLIS
+        end: false
+
+    - name: start_Mandatory_Order
+      path: mandatory-order
+      method: "GET"
+      lraSettings:
+        type: MANDATORY
+        timeLimit: 0
+        timeUnit: MILLIS
         end: false

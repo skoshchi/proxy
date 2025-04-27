@@ -93,6 +93,20 @@ public class HotelResource {
         return Response.ok("Nested order started").build();
     }
 
+    @GET
+    @Path("/never-order")
+    public Response neverOrder() {
+        niceStringOutput("[never-order] This should never run inside an LRA");
+        return Response.ok("Never LRA operation completed").build();
+    }
+
+    @GET
+    @Path("/mandatory-order")
+    public Response mandatoryOrder() {
+        niceStringOutput("[mandatory-order] This MUST be called inside an LRA");
+        return Response.ok("Mandatory LRA operation completed").build();
+    }
+
     private void niceStringOutput(String input) {
         System.out.println( "===========\n" +
                 input + "\n"    +

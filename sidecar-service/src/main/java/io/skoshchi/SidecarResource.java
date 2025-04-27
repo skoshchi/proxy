@@ -83,15 +83,36 @@ public class SidecarResource {
 
         try {
             switch (type) {
+                case NEVER:
+                    if (incomingLRA != null) {
+                        return Response.status(Response.Status.PRECONDITION_FAILED)
+                                .entity("[NEVER] LRA is not required but incoming LRA present")
+                                .build();
+                    } else {
+                        activeLRA = null;
+                    }
+                    break;
+
+                case MANDATORY:
+                    if (incomingLRA != null) {
+                        activeLRA = incomingLRA;
+                    } else {
+                        return Response.status(Response.Status.PRECONDITION_FAILED)
+                                .entity("[MANDATORY] LRA required but no incoming LRA present")
+                                .build();
+                    }
+                    break;
+
                 case NESTED:
                     if (incomingLRA != null) {
                         activeLRA = narayanaLRAClient.startLRA(incomingLRA, lraName, timeout, timeUnit);
                     } else {
                         return Response.status(Response.Status.PRECONDITION_FAILED)
-                                .entity("NESTED LRA requested but no incoming parent LRA present")
+                                .entity("NESTED LRA required but no incoming LRA present")
                                 .build();
                     }
                     break;
+
                 case REQUIRED:
                     if (incomingLRA != null) {
                         activeLRA = incomingLRA;
@@ -106,6 +127,7 @@ public class SidecarResource {
                     activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
                     niceStringOutput("Started REQUIRES_NEW LRA: " + activeLRA);
                     break;
+
                 default:
                     niceStringOutput("No LRA started (type = " + type + ")");
             }
