@@ -65,6 +65,8 @@ public class SidecarResource {
             return Response.status(Response.Status.NOT_FOUND).entity("Path not found").build();
         }
 
+        List<Object> fullContext = Current.getContexts();
+
         LRAControl lraControl = controlsByPath.get(lastPath);
         String lraName = lraControl.getName();
         LRA.Type type = lraControl.getLraSettings().getType();
@@ -73,26 +75,27 @@ public class SidecarResource {
         boolean end = lraControl.getLraSettings().isEnd();
 
         URI incomingLRA = Current.peek();
-        niceStringOutput("incomingLRA " + incomingLRA);
         URI activeLRA = null;
+        niceStringOutput("incomingLRA " + incomingLRA);
 
         try {
             switch (type) {
                 case REQUIRED:
                     if (incomingLRA != null) {
-                        activeLRA = narayanaLRAClient.startLRA(incomingLRA, lraName, timeout, timeUnit);
+                        activeLRA = incomingLRA;
                         niceStringOutput("Using incoming REQUIRED LRA: " + activeLRA);
                     } else {
                         activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
                         niceStringOutput("Started new REQUIRED LRA: " + activeLRA);
                     }
+                    Current.push(activeLRA);
                     break;
 
                 case REQUIRES_NEW:
                     activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
                     niceStringOutput("Started REQUIRES_NEW LRA: " + activeLRA);
+                    Current.push(activeLRA);
                     break;
-
                 default:
                     niceStringOutput("No LRA started (type = " + type + ")");
             }
