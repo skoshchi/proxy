@@ -25,11 +25,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.LRA_HTTP_CONTEXT_HEADER;
+import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.LRA_HTTP_PARENT_CONTEXT_HEADER;
+import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.Type.NESTED;
 
 @Path("")
 @ApplicationScoped
@@ -80,6 +83,15 @@ public class SidecarResource {
 
         try {
             switch (type) {
+                case NESTED:
+                    if (incomingLRA != null) {
+                        activeLRA = narayanaLRAClient.startLRA(incomingLRA, lraName, timeout, timeUnit);
+                    } else {
+                        return Response.status(Response.Status.PRECONDITION_FAILED)
+                                .entity("NESTED LRA requested but no incoming parent LRA present")
+                                .build();
+                    }
+                    break;
                 case REQUIRED:
                     if (incomingLRA != null) {
                         activeLRA = incomingLRA;
@@ -88,13 +100,11 @@ public class SidecarResource {
                         activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
                         niceStringOutput("Started new REQUIRED LRA: " + activeLRA);
                     }
-                    Current.push(activeLRA);
                     break;
 
                 case REQUIRES_NEW:
                     activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
                     niceStringOutput("Started REQUIRES_NEW LRA: " + activeLRA);
-                    Current.push(activeLRA);
                     break;
                 default:
                     niceStringOutput("No LRA started (type = " + type + ")");
@@ -107,6 +117,8 @@ public class SidecarResource {
                 niceStringOutput("Closed LRA: " + activeLRA);
             }
 
+            Current.push(activeLRA);
+            Current.addActiveLRACache(activeLRA);
             return proxyResponse;
 
         } catch (Exception e) {

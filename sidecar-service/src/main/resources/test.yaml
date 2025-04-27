@@ -18,3 +18,10 @@ lraProxy:
       path: process-success
       method: GET
       lraMethod: Complete
+
+    - name: Start_Nested_Order
+      path: "start-nested-order"
+      method: "GET"
+      lraSettings:
+        type: NESTED
+        end: false

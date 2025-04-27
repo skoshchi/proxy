@@ -84,6 +84,15 @@ public class HotelResource {
         return Response.ok("AfterLRA handled").build();
     }
 
+    @GET
+    @Path("/start-nested-order")
+    public Response startNestedOrder() throws InterruptedException {
+        Thread.sleep(500);
+        orderStatus = OrderStatus.BOOKING;
+        niceStringOutput("[start-nested-order] Booking started inside nested LRA");
+        return Response.ok("Nested order started").build();
+    }
+
     private void niceStringOutput(String input) {
         System.out.println( "===========\n" +
                 input + "\n"    +
