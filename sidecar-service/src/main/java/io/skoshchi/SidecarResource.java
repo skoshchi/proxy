@@ -4,12 +4,15 @@ import io.narayana.lra.Current;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
 import io.skoshchi.yaml.LRAControl;
 import io.skoshchi.yaml.LRAProxyConfigFile;
+import io.skoshchi.yaml.MethodType;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.container.ResourceInfo;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
@@ -24,11 +27,15 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Path("")
 @ApplicationScoped
 public class SidecarResource {
+
+    @Context
+    protected ResourceInfo resourceInfo;
 
     @Inject
     NarayanaLRAClient narayanaLRAClient;
@@ -44,7 +51,6 @@ public class SidecarResource {
     @PostConstruct
     public void init() {
         config = loadYamlConfig(configPath);
-        controlsByPath = getControlsByPath();
     }
 
     @GET
@@ -53,9 +59,14 @@ public class SidecarResource {
         String[] parts = path.split("/");
         String lastPath = parts.length > 0 ? parts[parts.length - 1] : path;
 
+        if (!isYamlOK(config)) {
+            return Response.status(Response.Status.CONFLICT).entity("Yaml have a problem").build();
+        }
+        controlsByPath = getControlsByPath();
         if (!controlsByPath.containsKey(lastPath)) {
             return Response.status(Response.Status.NOT_FOUND).entity("Path not found").build();
         }
+
 
         LRAControl lraControl = controlsByPath.get(lastPath);
         String lraName = lraControl.getName();
@@ -177,6 +188,79 @@ public class SidecarResource {
         } catch (Exception e) {
             throw new RuntimeException("Failed to load YAML: " + filePath, e);
         }
+    }
+
+//    private String buildParticipantLink(LRAControl control) {
+//        StringBuilder linkHeaderValue = new StringBuilder();
+//
+//        makeLink(linkHeaderValue, "compensate", control.getCompensateUrl());
+//        makeLink(linkHeaderValue, "complete", control.getCompleteUrl());
+//        makeLink(linkHeaderValue, "forget", control.getForgetUrl());
+//        makeLink(linkHeaderValue, "leave", null); // если нужно leave, можно позже добавить
+//        makeLink(linkHeaderValue, "after", control.getAfterUrl());
+//        makeLink(linkHeaderValue, "status", control.getStatusUrl());
+//
+//        return linkHeaderValue.toString();
+//    }
+//
+//    private void makeLink(StringBuilder b, String rel, String uri) {
+//        if (rel == null || uri == null) {
+//            return;
+//        }
+//
+//        if (b.length() != 0) {
+//            b.append(",");
+//        }
+//
+//        b.append(String.format("<%s>; rel=\"%s\"", uri, rel));
+//    }
+
+
+    private boolean isYamlOK(LRAProxyConfigFile config) throws RuntimeException {
+        List<LRAControl> controls = config.getLraProxy().getLraControls();
+        controls.forEach(control -> {
+            int index = controls.indexOf(control);
+            String prefix = "Error in lraControls[" + index + "]: ";
+
+            if (control.getName() == null || control.getName().isEmpty()) {
+                throw new RuntimeException(prefix + "'name' is missing or empty");
+            }
+
+            if (control.getPath() == null || control.getPath().isEmpty()) {
+                throw new RuntimeException(prefix + "'path' is missing or empty");
+            }
+
+            if (control.getMethod() == null ||
+                    !List.of("GET", "POST", "PUT", "DELETE", "PATCH").contains(control.getMethod().toUpperCase())) {
+                throw new RuntimeException(prefix + "'method' must be a valid HTTP method");
+            }
+
+            boolean hasSettings = control.getLraSettings() != null;
+            boolean hasMethodType = control.getLraMethod() != null;
+
+            if (hasSettings && hasMethodType) {
+                throw new RuntimeException(prefix + "Both 'lraSettings' and 'lraMethod' cannot be present at the same time");
+            }
+
+            if (!hasSettings && !hasMethodType) {
+                throw new RuntimeException(prefix + "One of 'lraSettings' or 'lraMethod' must be defined");
+            }
+
+            if (hasMethodType &&
+                    !List.of(MethodType.Compensate, MethodType.Complete, MethodType.Forget, MethodType.Status, MethodType.AfterLRA)
+                            .contains(control.getLraMethod())) {
+                throw new RuntimeException(prefix + "Invalid 'lraMethod': " + control.getLraMethod());
+            }
+
+
+            if (hasSettings) {
+                if (control.getLraSettings().getType() == null) {
+                    throw new RuntimeException(prefix + "'lraSettings.type' must not be null");
+                }
+            }
+        });
+
+        return true;
     }
 
     private Map<String, LRAControl> getControlsByPath() {
