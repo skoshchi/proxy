@@ -13,6 +13,8 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.container.ResourceInfo;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.Link;
+import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
@@ -22,6 +24,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -29,6 +32,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static io.narayana.lra.LRAConstants.*;
+import static io.narayana.lra.LRAConstants.STATUS;
 
 @Path("")
 @ApplicationScoped
@@ -70,76 +76,87 @@ public class SidecarResource {
 
         LRAControl lraControl = controlsByPath.get(lastPath);
         String lraName = lraControl.getName();
-        LRA.Type type = lraControl.getLraSettings().getType();
-        Long timeout = lraControl.getLraSettings().getTimeLimit();
-        ChronoUnit timeUnit = lraControl.getLraSettings().getTimeUnit();
-        boolean end = lraControl.getLraSettings().isEnd();
+        LRA.Type type = lraControl.getLraSettings() != null ? lraControl.getLraSettings().getType() : null;
+        Long timeout = lraControl.getLraSettings() != null ? lraControl.getLraSettings().getTimeLimit() : 0L;
+        ChronoUnit timeUnit = lraControl.getLraSettings() != null ? lraControl.getLraSettings().getTimeUnit() : ChronoUnit.SECONDS;
+        boolean end = lraControl.getLraSettings() != null && lraControl.getLraSettings().isEnd();
 
         URI incomingLRA = Current.peek();
         URI activeLRA = null;
+        URI recoveryUrl = null;
         niceStringOutput("incomingLRA " + incomingLRA);
 
         try {
-            switch (type) {
-                case SUPPORTS:
-                    if (incomingLRA != null) {
-                        activeLRA = incomingLRA;
-                    } else {
+            if (type != null) {
+                switch (type) {
+                    case SUPPORTS:
+                        if (incomingLRA != null) {
+                            activeLRA = incomingLRA;
+                        } else {
+                            activeLRA = null;
+                        }
+                        break;
+
+                    case NOT_SUPPORTED:
                         activeLRA = null;
-                    }
-                    break;
+                        break;
 
-                case NOT_SUPPORTED:
-                    activeLRA = null;
-                    break;
+                    case NEVER:
+                        if (incomingLRA != null) {
+                            return Response.status(Response.Status.PRECONDITION_FAILED)
+                                    .entity("[NEVER] LRA is not required but incoming LRA present")
+                                    .build();
+                        } else {
+                            activeLRA = null;
+                        }
+                        break;
 
-                case NEVER:
-                    if (incomingLRA != null) {
-                        return Response.status(Response.Status.PRECONDITION_FAILED)
-                                .entity("[NEVER] LRA is not required but incoming LRA present")
-                                .build();
-                    } else {
-                        activeLRA = null;
-                    }
-                    break;
+                    case MANDATORY:
+                        if (incomingLRA != null) {
+                            activeLRA = incomingLRA;
+                        } else {
+                            return Response.status(Response.Status.PRECONDITION_FAILED)
+                                    .entity("[MANDATORY] LRA required but no incoming LRA present")
+                                    .build();
+                        }
+                        break;
 
-                case MANDATORY:
-                    if (incomingLRA != null) {
-                        activeLRA = incomingLRA;
-                    } else {
-                        return Response.status(Response.Status.PRECONDITION_FAILED)
-                                .entity("[MANDATORY] LRA required but no incoming LRA present")
-                                .build();
-                    }
-                    break;
+                    case NESTED:
+                        if (incomingLRA != null) {
+                            activeLRA = narayanaLRAClient.startLRA(incomingLRA, lraName, timeout, timeUnit);
+                        } else {
+                            return Response.status(Response.Status.PRECONDITION_FAILED)
+                                    .entity("NESTED LRA required but no incoming LRA present")
+                                    .build();
+                        }
+                        break;
 
-                case NESTED:
-                    if (incomingLRA != null) {
-                        activeLRA = narayanaLRAClient.startLRA(incomingLRA, lraName, timeout, timeUnit);
-                    } else {
-                        return Response.status(Response.Status.PRECONDITION_FAILED)
-                                .entity("NESTED LRA required but no incoming LRA present")
-                                .build();
-                    }
-                    break;
+                    case REQUIRED:
+                        if (incomingLRA != null) {
+                            activeLRA = incomingLRA;
+                            niceStringOutput("Using incoming REQUIRED LRA: " + activeLRA);
+                        } else {
+                            activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
+                            niceStringOutput("Started new REQUIRED LRA: " + activeLRA);
+                        }
+                        break;
 
-                case REQUIRED:
-                    if (incomingLRA != null) {
-                        activeLRA = incomingLRA;
-                        niceStringOutput("Using incoming REQUIRED LRA: " + activeLRA);
-                    } else {
+                    case REQUIRES_NEW:
                         activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
-                        niceStringOutput("Started new REQUIRED LRA: " + activeLRA);
-                    }
-                    break;
+                        niceStringOutput("Started REQUIRES_NEW LRA: " + activeLRA);
+                        break;
 
-                case REQUIRES_NEW:
-                    activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
-                    niceStringOutput("Started REQUIRES_NEW LRA: " + activeLRA);
-                    break;
+                    default:
+                        niceStringOutput("No LRA started (type = " + type + ")");
+                }
+            }
 
-                default:
-                    niceStringOutput("No LRA started (type = " + type + ")");
+
+            if (activeLRA != null && hasCompensatorConfig()) {
+                String compensatorLink = safeBuildCompensatorURI();
+
+                narayanaLRAClient.enlistCompensator(activeLRA, timeout, compensatorLink, null);
+                niceStringOutput("Enlisted compensator for LRA: " + activeLRA);
             }
 
             Response proxyResponse = sendGetRequest(lastPath, "Proxy with LRA: " + activeLRA);
@@ -156,6 +173,55 @@ public class SidecarResource {
         } catch (Exception e) {
             return Response.serverError().entity("Error processing LRA: " + e.getMessage()).build();
         }
+    }
+
+    private boolean hasCompensatorConfig() {
+        return config.getLraProxy().getLraControls().stream()
+                .anyMatch(control -> control.getLraMethod() == MethodType.COMPENSATE
+                        || control.getLraMethod() == MethodType.AFTER_LRA);
+    }
+
+    private String safeBuildCompensatorURI() {
+        StringBuilder linkHeaderValue = new StringBuilder();
+
+        appendLinkIfExists(linkHeaderValue, COMPENSATE, getFullPathForLraMethodSafe(MethodType.COMPENSATE));
+        appendLinkIfExists(linkHeaderValue, COMPLETE, getFullPathForLraMethodSafe(MethodType.COMPLETE));
+        appendLinkIfExists(linkHeaderValue, FORGET, getFullPathForLraMethodSafe(MethodType.FORGET));
+        appendLinkIfExists(linkHeaderValue, LEAVE, getFullPathForLraMethodSafe(MethodType.LEAVE));
+        appendLinkIfExists(linkHeaderValue, AFTER, getFullPathForLraMethodSafe(MethodType.AFTER_LRA));
+        appendLinkIfExists(linkHeaderValue, STATUS, getFullPathForLraMethodSafe(MethodType.STATUS));
+
+        return linkHeaderValue.toString();
+    }
+
+    private void appendLinkIfExists(StringBuilder builder, String key, URI uri) {
+        if (uri != null) {
+            makeLink(builder, key, uri);
+        }
+    }
+
+    private URI getFullPathForLraMethodSafe(MethodType methodType) {
+        try {
+            return getFullPathForLraMethod(methodType);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+
+    private static void makeLink(StringBuilder b, String key, URI value) {
+        if (key == null || value == null) {
+            return;
+        }
+
+        String uri = value.toASCIIString();
+        Link link =  Link.fromUri(uri).title(key + " URI").rel(key).type(MediaType.TEXT_PLAIN).build();
+
+        if (b.length() != 0) {
+            b.append(',');
+        }
+
+        b.append(link);
     }
 
     private void niceStringOutput(String input) {
@@ -190,31 +256,6 @@ public class SidecarResource {
         }
     }
 
-//    private String buildParticipantLink(LRAControl control) {
-//        StringBuilder linkHeaderValue = new StringBuilder();
-//
-//        makeLink(linkHeaderValue, "compensate", control.getCompensateUrl());
-//        makeLink(linkHeaderValue, "complete", control.getCompleteUrl());
-//        makeLink(linkHeaderValue, "forget", control.getForgetUrl());
-//        makeLink(linkHeaderValue, "leave", null); // если нужно leave, можно позже добавить
-//        makeLink(linkHeaderValue, "after", control.getAfterUrl());
-//        makeLink(linkHeaderValue, "status", control.getStatusUrl());
-//
-//        return linkHeaderValue.toString();
-//    }
-//
-//    private void makeLink(StringBuilder b, String rel, String uri) {
-//        if (rel == null || uri == null) {
-//            return;
-//        }
-//
-//        if (b.length() != 0) {
-//            b.append(",");
-//        }
-//
-//        b.append(String.format("<%s>; rel=\"%s\"", uri, rel));
-//    }
-
 
     private boolean isYamlOK(LRAProxyConfigFile config) throws RuntimeException {
         List<LRAControl> controls = config.getLraProxy().getLraControls();
@@ -247,7 +288,12 @@ public class SidecarResource {
             }
 
             if (hasMethodType &&
-                    !List.of(MethodType.Compensate, MethodType.Complete, MethodType.Forget, MethodType.Status, MethodType.AfterLRA)
+                    !List.of(   MethodType.COMPENSATE,
+                                MethodType.COMPLETE,
+                                MethodType.FORGET,
+                                MethodType.STATUS,
+                                MethodType.LEAVE,
+                                MethodType.AFTER_LRA)
                             .contains(control.getLraMethod())) {
                 throw new RuntimeException(prefix + "Invalid 'lraMethod': " + control.getLraMethod());
             }
@@ -273,5 +319,34 @@ public class SidecarResource {
             }
         }
         return controlsByPath;
+    }
+
+    private URI getFullPathForLraMethod(MethodType methodType) {
+        if (methodType == null) {
+            throw new IllegalArgumentException("MethodType must not be null");
+        }
+
+        String baseUrl = config.getLraProxy().getUrl();
+        String serviceName = config.getLraProxy().getServiceName();
+        String actionPath = null;
+
+        for (LRAControl control : config.getLraProxy().getLraControls()) {
+            if (control.getLraMethod() != null && control.getLraMethod() == methodType) {
+                actionPath = control.getPath();
+                break;
+            }
+        }
+
+        if (actionPath == null) {
+            throw new IllegalArgumentException("No LRA control found for MethodType: " + methodType);
+        }
+
+        String output = String.format("%s/%s/%s", baseUrl, serviceName, actionPath);
+
+        try {
+            return new URI(output);
+        } catch (URISyntaxException e) {
+            throw new RuntimeException("Failed to create URI from: " + output, e);
+        }
     }
 }

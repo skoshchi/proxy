@@ -16,11 +16,6 @@ lraProxy:
         type: REQUIRED
         end: false
 
-    - name: complete-test
-      path: process-success
-      method: GET
-      lraMethod: Complete
-
     - name: start_nested_Order
       path: start-nested-order
       method: "GET"
@@ -43,15 +38,46 @@ lraProxy:
         end: false
 
     - name: supports_order
-      path: "supports-order"
+      path: supports-order
       method: "GET"
       lraSettings:
         type: SUPPORTS
         end: false
 
     - name: not_supported_order
-      path: "not-supported-order"
+      path: not-supported-order
       method: "GET"
       lraSettings:
         type: NOT_SUPPORTED
         end: false
+
+    # Participants of compensation
+    - name: complete_test
+      path: complete
+      method: POST
+      lraMethod: COMPLETE
+
+#    - name: compensate_test
+#      path: compensate
+#      method: POST
+#      lraMethod: COMPENSATE
+#
+#    - name: forget_test
+#      path: forget
+#      method: POST
+#      lraMethod: FORGET
+#
+#    - name: leave_test
+#      path: leave
+#      method: GET
+#      lraMethod: LEAVE
+#
+#    - name: status_test
+#      path: status
+#      method: GET
+#      lraMethod: STATUS
+
+    - name: after_lra_test
+      path: after-lra
+      method: GET
+      lraMethod: AFTER_LRA

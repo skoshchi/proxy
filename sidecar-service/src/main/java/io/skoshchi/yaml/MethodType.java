@@ -1,9 +1,10 @@
 package io.skoshchi.yaml;
 
 public enum MethodType {
-    Compensate,
-    Complete,
-    Status,
-    Forget,
-    AfterLRA
+    COMPENSATE,
+    COMPLETE,
+    STATUS,
+    FORGET,
+    LEAVE,
+    AFTER_LRA
 }

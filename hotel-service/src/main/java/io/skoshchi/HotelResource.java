@@ -49,7 +49,7 @@ public class HotelResource {
     }
 
     @POST
-    @Path("/compensate-order")
+    @Path("/compensate")
     public Response compensate() {
         orderStatus = OrderStatus.NOT_BOOKED;
         niceStringOutput("[Compensate] called by sidecar");
@@ -57,28 +57,35 @@ public class HotelResource {
     }
 
     @POST
-    @Path("/complete-order")
+    @Path("/complete")
     public Response complete() {
         niceStringOutput("[Complete] called by sidecar");
         return Response.ok("Completed").build();
     }
 
     @GET
-    @Path("/status-order")
+    @Path("/status")
     public Response status() {
         niceStringOutput("[Status] Order status: " + orderStatus);
         return Response.ok(orderStatus.name()).build();
     }
 
     @POST
-    @Path("/forget-order")
+    @Path("/forget")
     public Response forget() {
         niceStringOutput("[Forget] Cleanup complete");
         return Response.ok("Forgotten").build();
     }
 
     @GET
-    @Path("/after-lra-order")
+    @Path("/leave")
+    public Response leaveOrder() {
+        niceStringOutput("[Leave] called by sidecar");
+        return Response.ok("Leave").build();
+    }
+
+    @GET
+    @Path("/after-lra")
     public Response afterLRA() {
         niceStringOutput("[AfterLRA] Final callback received");
         return Response.ok("AfterLRA handled").build();
