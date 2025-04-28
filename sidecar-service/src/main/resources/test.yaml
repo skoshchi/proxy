@@ -8,13 +8,50 @@ lraProxy:
       lraSettings:
         type: REQUIRES_NEW
         end: false
+
     - name: LRA2
       path: start-order-2
       method: GET
       lraSettings:
         type: REQUIRED
         end: false
+
     - name: complete-test
       path: process-success
       method: GET
       lraMethod: Complete
+
+    - name: start_nested_Order
+      path: start-nested-order
+      method: "GET"
+      lraSettings:
+        type: NESTED
+        end: false
+
+    - name: start_never_order
+      path: never-order
+      method: "GET"
+      lraSettings:
+        type: NEVER
+        end: false
+
+    - name: start_mandatory_order
+      path: mandatory-order
+      method: "GET"
+      lraSettings:
+        type: MANDATORY
+        end: false
+
+    - name: supports_order
+      path: "supports-order"
+      method: "GET"
+      lraSettings:
+        type: SUPPORTS
+        end: false
+
+    - name: not_supported_order
+      path: "not-supported-order"
+      method: "GET"
+      lraSettings:
+        type: NOT_SUPPORTED
+        end: false

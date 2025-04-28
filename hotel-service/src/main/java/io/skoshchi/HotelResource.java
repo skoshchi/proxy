@@ -84,6 +84,43 @@ public class HotelResource {
         return Response.ok("AfterLRA handled").build();
     }
 
+    @GET
+    @Path("/start-nested-order")
+    public Response startNestedOrder() throws InterruptedException {
+        Thread.sleep(500);
+        orderStatus = OrderStatus.BOOKING;
+        niceStringOutput("[start-nested-order] Booking started inside nested LRA");
+        return Response.ok("Nested order started").build();
+    }
+
+    @GET
+    @Path("/never-order")
+    public Response neverOrder() {
+        niceStringOutput("[never-order] This should never run inside an LRA");
+        return Response.ok("Never LRA operation completed").build();
+    }
+
+    @GET
+    @Path("/mandatory-order")
+    public Response mandatoryOrder() {
+        niceStringOutput("[mandatory-order] This MUST be called inside an LRA");
+        return Response.ok("Mandatory LRA operation completed").build();
+    }
+
+    @GET
+    @Path("/supports-order")
+    public Response supportsOrder() {
+        niceStringOutput("[supports-order] Running with or without LRA context (SUPPORTS)");
+        return Response.ok("Supports LRA operation completed").build();
+    }
+
+    @GET
+    @Path("/not-supported-order")
+    public Response notSupportedOrder() {
+        niceStringOutput("[not-supported-order] Running outside any LRA (NOT_SUPPORTED)");
+        return Response.ok("Not Supported LRA operation completed").build();
+    }
+
     private void niceStringOutput(String input) {
         System.out.println( "===========\n" +
                 input + "\n"    +
