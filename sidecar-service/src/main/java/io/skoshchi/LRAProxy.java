@@ -2,15 +2,12 @@ package io.skoshchi;
 
 import io.narayana.lra.Current;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
-import io.skoshchi.yaml.LRAProxy;
 import io.skoshchi.yaml.LRAProxyConfigFile;
 import io.skoshchi.yaml.MethodType;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.container.ResourceInfo;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Link;
@@ -32,15 +29,19 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 
 import static io.narayana.lra.LRAConstants.*;
 import static io.narayana.lra.LRAConstants.STATUS;
+import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.LRA_HTTP_CONTEXT_HEADER;
 
 @Path("")
 @ApplicationScoped
-public class SidecarResource {
+public class LRAProxy {
 
     private String LRA_HTTP_HEADER = "Long-Running-Action";
+
+    private static final Logger log = Logger.getLogger(LRAProxy.class.getName());
 
     @Context
     protected ResourceInfo resourceInfo;
@@ -54,16 +55,59 @@ public class SidecarResource {
     public String configPath;
 
     private LRAProxyConfigFile config;
-    private Map<String, LRAProxy> controlsByPath = new HashMap<>();
+    private Map<String, io.skoshchi.yaml.LRAProxy> controlsByPath = new HashMap<>();
 
     @PostConstruct
     public void init() {
         config = loadYamlConfig(configPath);
+        if (!isYamlOK(config)) {
+            throw new IllegalStateException("YAML configuration is invalid: " + configPath);
+        }
+        controlsByPath = getControlsByPath();
     }
 
     @GET
     @Path("{path:.*}")
-    public Response proxyGet(@PathParam("path") String path) {
+    public Response proxyGet(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, @PathParam("path") String path) {
+        return handleRequest("GET", lraId, path);
+    }
+
+    @POST
+    @Path("{path:.*}")
+    public Response proxyPost(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, @PathParam("path") String path) {
+        return handleRequest("POST", lraId, path);
+    }
+
+    @PUT
+    @Path("{path:.*}")
+    public Response proxyPut(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, @PathParam("path") String path) {
+        return handleRequest("PUT", lraId, path);
+    }
+
+    @DELETE
+    @Path("{path:.*}")
+    public Response proxyDelete(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, @PathParam("path") String path) {
+        return handleRequest("DELETE", lraId, path);
+    }
+
+    @PATCH
+    @Path("{path:.*}")
+    public Response proxyPatch(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, @PathParam("path") String path) {
+        return handleRequest("PATCH", lraId, path);
+    }
+
+
+    public Response handleRequest(String method, URI lraId, String path) {
+        // yaml check
+        log.info("[handleRequest] " + method +
+                " Incoming path: " + path +
+                " Header lraId: " + lraId);
+
+        return Response.ok("Request is done").build();
+    }
+
+    /// Old stuff
+    public Response proxyGetOld(String path) {
         String[] parts = path.split("/");
         String lastPath = parts.length > 0 ? parts[parts.length - 1] : path;
 
@@ -76,7 +120,7 @@ public class SidecarResource {
         }
         System.out.println();
 
-        LRAProxy lraProxy = controlsByPath.get(lastPath);
+        io.skoshchi.yaml.LRAProxy lraProxy = controlsByPath.get(lastPath);
         LRA.Type type = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getType() : null;
         Long timeout = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getTimeLimit() : 0L;
         ChronoUnit timeUnit = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getTimeUnit() : ChronoUnit.SECONDS;
@@ -190,7 +234,7 @@ public class SidecarResource {
     }
 
     private String safeBuildCompensatorURI() {
-        StringBuilder linkHeaderValue = new StringBuilder();
+         StringBuilder linkHeaderValue = new StringBuilder();
 
         appendLinkIfExists(linkHeaderValue, COMPENSATE, getFullPathForLraMethodSafe(MethodType.COMPENSATE));
         appendLinkIfExists(linkHeaderValue, COMPLETE, getFullPathForLraMethodSafe(MethodType.COMPLETE));
@@ -266,7 +310,7 @@ public class SidecarResource {
 
 
     private boolean isYamlOK(LRAProxyConfigFile config) throws RuntimeException {
-        List<LRAProxy> controls = config.getProxy().getLra();
+        List<io.skoshchi.yaml.LRAProxy> controls = config.getProxy().getLra();
         controls.forEach(control -> {
             int index = controls.indexOf(control);
             String prefix = "Error in lraControls[" + index + "]: ";
@@ -313,10 +357,10 @@ public class SidecarResource {
         return true;
     }
 
-    private Map<String, LRAProxy> getControlsByPath() {
-        Map<String, LRAProxy> controlsByPath = new HashMap<>();
+    private Map<String, io.skoshchi.yaml.LRAProxy> getControlsByPath() {
+        Map<String, io.skoshchi.yaml.LRAProxy> controlsByPath = new HashMap<>();
         if (config != null && config.getProxy() != null && config.getProxy().getLra() != null) {
-            for (LRAProxy control : config.getProxy().getLra()) {
+            for (io.skoshchi.yaml.LRAProxy control : config.getProxy().getLra()) {
                 if (control.getPath() != null) {
                     controlsByPath.put(control.getPath(), control);
                 }
@@ -334,7 +378,7 @@ public class SidecarResource {
         String serviceName = config.getProxy().getService();
         String actionPath = null;
 
-        for (LRAProxy control : config.getProxy().getLra()) {
+        for (io.skoshchi.yaml.LRAProxy control : config.getProxy().getLra()) {
             if (control.getLraMethod() != null && control.getLraMethod() == methodType) {
                 actionPath = control.getPath();
                 break;
