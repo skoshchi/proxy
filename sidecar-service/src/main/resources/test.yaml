@@ -1,6 +1,6 @@
 proxy:
   url: http://localhost:8082
-  service: non-participating-tck-resource
+  service: hotel
   lra:
     - path: /start-dont-end
       method: PUT

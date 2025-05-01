@@ -98,27 +98,22 @@ public class LRAProxy {
 
 
     public Response handleRequest(String method, URI lraId, String path) {
-        // yaml check
         log.info("[handleRequest] " + method +
                 " Incoming path: " + path +
                 " Header lraId: " + lraId);
 
-        return Response.ok("Request is done").build();
-    }
-
-    /// Old stuff
-    public Response proxyGetOld(String path) {
         String[] parts = path.split("/");
-        String lastPath = parts.length > 0 ? parts[parts.length - 1] : path;
 
-        if (!isYamlOK(config)) {
-            return Response.status(Response.Status.CONFLICT).entity("Yaml have a problem").build();
-        }
-        controlsByPath = getControlsByPath();
+//        if (!parts[0].equals(config.getProxy().getService())) {
+//            throw new IllegalStateException("Service name is invalid: " + configPath);
+//        }
+
+        String lastPath = parts.length > 1
+                ? "/" + String.join("/", java.util.Arrays.copyOfRange(parts, 1, parts.length)): "/";
+
         if (!controlsByPath.containsKey(lastPath)) {
-            return Response.status(Response.Status.NOT_FOUND).entity("Path not found").build();
+            throw new IllegalStateException("No path " + lastPath +" in yaml");
         }
-        System.out.println();
 
         io.skoshchi.yaml.LRAProxy lraProxy = controlsByPath.get(lastPath);
         LRA.Type type = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getType() : null;
@@ -129,7 +124,7 @@ public class LRAProxy {
         URI incomingLRA = Current.peek();
         URI activeLRA = null;
         URI recoveryUrl = null;
-        niceStringOutput("incomingLRA " + incomingLRA);
+        log.info("incomingLRA " + incomingLRA);
 
         try {
             if (type != null) {
@@ -180,47 +175,43 @@ public class LRAProxy {
                     case REQUIRED:
                         if (incomingLRA != null) {
                             activeLRA = incomingLRA;
-                            niceStringOutput("Using incoming REQUIRED LRA: " + activeLRA);
+                            log.info("Using incoming REQUIRED LRA: " + activeLRA);
                         } else {
                             activeLRA = narayanaLRAClient.startLRA(null, "clientID", timeout, timeUnit);
-                            niceStringOutput("Started new REQUIRED LRA: " + activeLRA);
+                            log.info("Started new REQUIRED LRA: " + activeLRA);
                         }
                         break;
 
                     case REQUIRES_NEW:
                         activeLRA = narayanaLRAClient.startLRA(null, "clientID", timeout, timeUnit);
-                        niceStringOutput("Started REQUIRES_NEW LRA: " + activeLRA);
+                        log.info("Started REQUIRES_NEW LRA: " + activeLRA);
                         break;
 
                     default:
-                        niceStringOutput("No LRA started (type = " + type + ")");
+                        log.info("No LRA started (type = " + type + ")");
                 }
             }
-
 
             if (activeLRA != null && hasCompensatorConfig()) {
                 String compensatorLink = safeBuildCompensatorURI();
 
                 narayanaLRAClient.enlistCompensator(activeLRA, timeout, compensatorLink, null);
-                niceStringOutput("Enlisted compensator for LRA: " + activeLRA);
+                log.info("Enlisted compensator for LRA: " + activeLRA);
             }
 
 //            Response proxyResponse = sendGetRequest(lastPath, "Proxy with LRA: " + activeLRA);
 
             if (end && activeLRA != null) {
                 narayanaLRAClient.closeLRA(activeLRA);
-                niceStringOutput("Closed LRA: " + activeLRA);
+                log.info("Closed LRA: " + activeLRA);
             }
 
             Current.push(activeLRA);
             Current.addActiveLRACache(activeLRA);
             return Response.status(Response.Status.OK)
                     .entity("Test LRA " + activeLRA)
-//                    .header(LRA_HTTP_HEADER, activeLRA != null ? activeLRA.toASCIIString() : "")
-                    .header(LRA_HTTP_HEADER, activeLRA)
+                    .header(LRA_HTTP_HEADER, activeLRA != null ? activeLRA.toASCIIString() : "")
                     .build();
-
-
 
         } catch (Exception e) {
             return Response.serverError().entity("Error processing LRA: " + e.getMessage()).build();
