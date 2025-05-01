@@ -2,7 +2,7 @@ package io.skoshchi;
 
 import io.narayana.lra.Current;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
-import io.skoshchi.yaml.LRAControl;
+import io.skoshchi.yaml.LRAProxy;
 import io.skoshchi.yaml.LRAProxyConfigFile;
 import io.skoshchi.yaml.MethodType;
 import jakarta.annotation.PostConstruct;
@@ -40,6 +40,8 @@ import static io.narayana.lra.LRAConstants.STATUS;
 @ApplicationScoped
 public class SidecarResource {
 
+    private String LRA_HTTP_HEADER = "Long-Running-Action";
+
     @Context
     protected ResourceInfo resourceInfo;
 
@@ -52,7 +54,7 @@ public class SidecarResource {
     public String configPath;
 
     private LRAProxyConfigFile config;
-    private Map<String, LRAControl> controlsByPath = new HashMap<>();
+    private Map<String, LRAProxy> controlsByPath = new HashMap<>();
 
     @PostConstruct
     public void init() {
@@ -72,14 +74,13 @@ public class SidecarResource {
         if (!controlsByPath.containsKey(lastPath)) {
             return Response.status(Response.Status.NOT_FOUND).entity("Path not found").build();
         }
+        System.out.println();
 
-
-        LRAControl lraControl = controlsByPath.get(lastPath);
-        String lraName = lraControl.getName();
-        LRA.Type type = lraControl.getLraSettings() != null ? lraControl.getLraSettings().getType() : null;
-        Long timeout = lraControl.getLraSettings() != null ? lraControl.getLraSettings().getTimeLimit() : 0L;
-        ChronoUnit timeUnit = lraControl.getLraSettings() != null ? lraControl.getLraSettings().getTimeUnit() : ChronoUnit.SECONDS;
-        boolean end = lraControl.getLraSettings() != null && lraControl.getLraSettings().isEnd();
+        LRAProxy lraProxy = controlsByPath.get(lastPath);
+        LRA.Type type = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getType() : null;
+        Long timeout = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getTimeLimit() : 0L;
+        ChronoUnit timeUnit = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getTimeUnit() : ChronoUnit.SECONDS;
+        boolean end = lraProxy.getLraSettings() != null && lraProxy.getLraSettings().isEnd();
 
         URI incomingLRA = Current.peek();
         URI activeLRA = null;
@@ -105,6 +106,7 @@ public class SidecarResource {
                         if (incomingLRA != null) {
                             return Response.status(Response.Status.PRECONDITION_FAILED)
                                     .entity("[NEVER] LRA is not required but incoming LRA present")
+                                    .header(LRA_HTTP_HEADER, incomingLRA != null ? incomingLRA.toASCIIString() : "")
                                     .build();
                         } else {
                             activeLRA = null;
@@ -123,7 +125,7 @@ public class SidecarResource {
 
                     case NESTED:
                         if (incomingLRA != null) {
-                            activeLRA = narayanaLRAClient.startLRA(incomingLRA, lraName, timeout, timeUnit);
+                            activeLRA = narayanaLRAClient.startLRA(incomingLRA, "clientID", timeout, timeUnit);
                         } else {
                             return Response.status(Response.Status.PRECONDITION_FAILED)
                                     .entity("NESTED LRA required but no incoming LRA present")
@@ -136,13 +138,13 @@ public class SidecarResource {
                             activeLRA = incomingLRA;
                             niceStringOutput("Using incoming REQUIRED LRA: " + activeLRA);
                         } else {
-                            activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
+                            activeLRA = narayanaLRAClient.startLRA(null, "clientID", timeout, timeUnit);
                             niceStringOutput("Started new REQUIRED LRA: " + activeLRA);
                         }
                         break;
 
                     case REQUIRES_NEW:
-                        activeLRA = narayanaLRAClient.startLRA(null, lraName, timeout, timeUnit);
+                        activeLRA = narayanaLRAClient.startLRA(null, "clientID", timeout, timeUnit);
                         niceStringOutput("Started REQUIRES_NEW LRA: " + activeLRA);
                         break;
 
@@ -159,7 +161,7 @@ public class SidecarResource {
                 niceStringOutput("Enlisted compensator for LRA: " + activeLRA);
             }
 
-            Response proxyResponse = sendGetRequest(lastPath, "Proxy with LRA: " + activeLRA);
+//            Response proxyResponse = sendGetRequest(lastPath, "Proxy with LRA: " + activeLRA);
 
             if (end && activeLRA != null) {
                 narayanaLRAClient.closeLRA(activeLRA);
@@ -168,7 +170,13 @@ public class SidecarResource {
 
             Current.push(activeLRA);
             Current.addActiveLRACache(activeLRA);
-            return proxyResponse;
+            return Response.status(Response.Status.OK)
+                    .entity("Test LRA " + activeLRA)
+//                    .header(LRA_HTTP_HEADER, activeLRA != null ? activeLRA.toASCIIString() : "")
+                    .header(LRA_HTTP_HEADER, activeLRA)
+                    .build();
+
+
 
         } catch (Exception e) {
             return Response.serverError().entity("Error processing LRA: " + e.getMessage()).build();
@@ -176,7 +184,7 @@ public class SidecarResource {
     }
 
     private boolean hasCompensatorConfig() {
-        return config.getLraProxy().getLraControls().stream()
+        return config.getProxy().getLra().stream()
                 .anyMatch(control -> control.getLraMethod() == MethodType.COMPENSATE
                         || control.getLraMethod() == MethodType.AFTER_LRA);
     }
@@ -230,7 +238,7 @@ public class SidecarResource {
 
     private Response sendGetRequest(String pathSuffix, String successMessage) {
         try {
-            String targetUrl = config.getLraProxy().getUrl() + "/" + config.getLraProxy().getServiceName() + "/" + pathSuffix;
+            String targetUrl = config.getProxy().getUrl() + "/" + config.getProxy().getService() + "/" + pathSuffix;
             URI targetUri = URI.create(targetUrl);
 
             HttpRequest request = HttpRequest.newBuilder()
@@ -258,14 +266,10 @@ public class SidecarResource {
 
 
     private boolean isYamlOK(LRAProxyConfigFile config) throws RuntimeException {
-        List<LRAControl> controls = config.getLraProxy().getLraControls();
+        List<LRAProxy> controls = config.getProxy().getLra();
         controls.forEach(control -> {
             int index = controls.indexOf(control);
             String prefix = "Error in lraControls[" + index + "]: ";
-
-            if (control.getName() == null || control.getName().isEmpty()) {
-                throw new RuntimeException(prefix + "'name' is missing or empty");
-            }
 
             if (control.getPath() == null || control.getPath().isEmpty()) {
                 throw new RuntimeException(prefix + "'path' is missing or empty");
@@ -309,10 +313,10 @@ public class SidecarResource {
         return true;
     }
 
-    private Map<String, LRAControl> getControlsByPath() {
-        Map<String, LRAControl> controlsByPath = new HashMap<>();
-        if (config != null && config.getLraProxy() != null && config.getLraProxy().getLraControls() != null) {
-            for (LRAControl control : config.getLraProxy().getLraControls()) {
+    private Map<String, LRAProxy> getControlsByPath() {
+        Map<String, LRAProxy> controlsByPath = new HashMap<>();
+        if (config != null && config.getProxy() != null && config.getProxy().getLra() != null) {
+            for (LRAProxy control : config.getProxy().getLra()) {
                 if (control.getPath() != null) {
                     controlsByPath.put(control.getPath(), control);
                 }
@@ -326,11 +330,11 @@ public class SidecarResource {
             throw new IllegalArgumentException("MethodType must not be null");
         }
 
-        String baseUrl = config.getLraProxy().getUrl();
-        String serviceName = config.getLraProxy().getServiceName();
+        String baseUrl = config.getProxy().getUrl();
+        String serviceName = config.getProxy().getService();
         String actionPath = null;
 
-        for (LRAControl control : config.getLraProxy().getLraControls()) {
+        for (LRAProxy control : config.getProxy().getLra()) {
             if (control.getLraMethod() != null && control.getLraMethod() == methodType) {
                 actionPath = control.getPath();
                 break;

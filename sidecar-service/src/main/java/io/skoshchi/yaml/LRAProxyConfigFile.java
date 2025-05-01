@@ -1,23 +1,23 @@
 package io.skoshchi.yaml;
 
 public class LRAProxyConfigFile {
-    private LRAProxy lraProxy;
+    private Proxy proxy;
 
     public LRAProxyConfigFile() {
     }
 
-    public LRAProxy getLraProxy() {
-        return lraProxy;
+    public Proxy getProxy() {
+        return proxy;
     }
 
-    public void setLraProxy(LRAProxy lraProxy) {
-        this.lraProxy = lraProxy;
+    public void setProxy(Proxy proxy) {
+        this.proxy = proxy;
     }
 
     @Override
     public String toString() {
         return "LRAProxyConfigFile{" +
-                "lraProxy=" + lraProxy +
+                "proxy=" + proxy +
                 '}';
     }
 }

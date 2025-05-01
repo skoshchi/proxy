@@ -1,0 +1,84 @@
+proxy:
+  url: http://localhost:8082
+  service: non-participating-tck-resource
+  lra:
+    - path: start-dont-end
+      method: PUT
+      lraSettings:
+        type: REQUIRES_NEW
+        end: false
+        cancelOnFamily:
+          - SERVER_ERROR
+
+    - path: end
+      method: PUT
+      lraSettings:
+        type: MANDATORY
+        cancelOnFamily:
+          - SERVER_ERROR
+
+    - path: non-participating-tck-resource
+      lraSettings:
+        type: SUPPORTS
+        end: false
+
+#    - path: start-order-2
+#      method: GET
+#      lraSettings:
+#        type: REQUIRED
+#        end: false
+#
+#    - path: start-nested-order
+#      method: "GET"
+#      lraSettings:
+#        type: NESTED
+#        end: false
+#
+#    - path: never-order
+#      method: "GET"
+#      lraSettings:
+#        type: NEVER
+#        end: false
+#
+#    - path: mandatory-order
+#      method: "GET"
+#      lraSettings:
+#        type: MANDATORY
+#        end: false
+#
+#    - path: supports-order
+#      method: "GET"
+#      lraSettings:
+#        type: SUPPORTS
+#        end: false
+#
+#    - path: not-supported-order
+#      method: "GET"
+#      lraSettings:
+#        type: NOT_SUPPORTED
+#        end: false
+#
+#    # Participants of compensation
+#    - path: complete
+#      method: POST
+#      lraMethod: COMPLETE
+#
+#    - path: compensate
+#      method: POST
+#      lraMethod: COMPENSATE
+#
+#    - path: forget
+#      method: POST
+#      lraMethod: FORGET
+#
+#    - path: leave
+#      method: GET
+#      lraMethod: LEAVE
+#
+#    - path: status
+#      method: GET
+#      lraMethod: STATUS
+#
+#    - path: after-lra
+#      method: GET
+#      lraMethod: AFTER_LRA

@@ -1,47 +1,53 @@
 package io.skoshchi.yaml;
 
-import java.util.List;
-
 public class LRAProxy {
-    private String url;
-    private String serviceName;
-
-    private List<LRAControl> lraControls;
+    private String path;
+    private String method;
+    private LRASettings lraSettings;
+    private MethodType lraMethod;
 
     public LRAProxy() {
     }
 
-    public String getUrl() {
-        return url;
+    public String getPath() {
+        return path;
     }
 
-    public void setUrl(String url) {
-        this.url = url;
+    public void setPath(String path) {
+        this.path = path;
     }
 
-    public String getServiceName() {
-        return serviceName;
+    public String getMethod() {
+        return method;
     }
 
-    public void setServiceName(String serviceName) {
-        this.serviceName = serviceName;
+    public void setMethod(String method) {
+        this.method = method;
     }
 
-    public List<LRAControl> getLraControls() {
-        return lraControls;
+    public LRASettings getLraSettings() {
+        return lraSettings;
     }
 
-    public void setLraControls(List<LRAControl> lraControls) {
-        this.lraControls = lraControls;
+    public void setLraSettings(LRASettings lraSettings) {
+        this.lraSettings = lraSettings;
     }
 
+    public MethodType getLraMethod() {
+        return lraMethod;
+    }
+
+    public void setLraMethod(MethodType lraMethod) {
+        this.lraMethod = lraMethod;
+    }
 
     @Override
     public String toString() {
-        return "LRAProxyConfigFile{" +
-                "url='" + url + '\'' +
-                ", serviceName='" + serviceName + '\'' +
-                ", lraControls=" + lraControls +
+        return "LRAProxy{" +
+                "path='" + path + '\'' +
+                ", method='" + method + '\'' +
+                ", lraSettings=" + lraSettings +
+                ", lraMethod=" + lraMethod +
                 '}';
     }
 }

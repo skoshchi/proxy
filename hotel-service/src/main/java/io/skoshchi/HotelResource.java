@@ -22,7 +22,7 @@ public class HotelResource {
     }
 
     @GET
-    @Path("/start-order-1")
+    @Path("/start-dont-end-lra")
     public Response startOrder1() throws InterruptedException {
         Thread.sleep(1000);
         orderStatus = OrderStatus.BOOKING;
