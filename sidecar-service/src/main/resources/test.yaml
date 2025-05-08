@@ -2,9 +2,10 @@ proxy:
   url: http://127.0.0.1:8180
 #  url: http://localhost:8082
 #  service: non-participating-tck-resource
-  service: non-participating-tck-resource
+  service: tcktests
+  tckTests: true
   lra:
-    - path: /start-dont-end
+    - path: non-participating-tck-resource/start-dont-end
       method: PUT
       lraSettings:
         type: REQUIRES_NEW
@@ -12,14 +13,14 @@ proxy:
         cancelOnFamily:
           - SERVER_ERROR
 
-    - path: /end
+    - path: non-participating-tck-resource/end
       method: PUT
       lraSettings:
         type: MANDATORY
         cancelOnFamily:
           - SERVER_ERROR
 
-    - path: /after
+    - path: non-participating-tck-resource/after
       method: PUT
       lraMethod: AFTER_LRA
 

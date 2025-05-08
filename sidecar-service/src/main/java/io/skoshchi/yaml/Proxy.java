@@ -5,6 +5,7 @@ import java.util.List;
 public class Proxy {
     private String url;
     private String service;
+    private boolean tckTests;
 
     private List<LRAProxy> lra;
 
@@ -27,6 +28,14 @@ public class Proxy {
         this.service = service;
     }
 
+    public boolean isTckTests() {
+        return tckTests;
+    }
+
+    public void setTckTests(boolean tckTests) {
+        this.tckTests = tckTests;
+    }
+
     public List<LRAProxy> getLra() {
         return lra;
     }
@@ -40,6 +49,7 @@ public class Proxy {
         return "Proxy{" +
                 "url='" + url + '\'' +
                 ", service='" + service + '\'' +
+                ", tckTests=" + tckTests +
                 ", lra=" + lra +
                 '}';
     }

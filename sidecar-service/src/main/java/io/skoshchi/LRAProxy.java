@@ -110,18 +110,35 @@ public class LRAProxy {
                 " Incoming path: " + path +
                 " Header lraId: " + lraId);
 
-        int lastSlashIndex = path.lastIndexOf('/');
+        int lastSlashIndex = path.indexOf('/');
 
-        String basePath = path.substring(0, lastSlashIndex);
-        log.info("[handleRequest] basePath: "  + basePath);
-        if (!basePath.equals(config.getProxy().getService())) {
-            throw new IllegalStateException("Service path: " + basePath +
-                    " is wrong. Service path in yaml: " + config.getProxy().getService());
+        String basePath = null;
+
+        if (!config.getProxy().isTckTests()) {
+            basePath = path.substring(0, lastSlashIndex);
+            log.info("[handleRequest] basePath: "  + basePath);
+
+            if (!basePath.equals(config.getProxy().getService())) {
+                throw new IllegalStateException("Service path: " + basePath +
+                        " is wrong. Service path in yaml: " + config.getProxy().getService());
+            }
+        } else {
+            basePath = config.getProxy().getService();
+            log.info("[handleRequest] basePath: "  + basePath);
         }
 
-        String lastPath = path.substring(lastSlashIndex);
-        if (!controlsByPath.containsKey(lastPath)) {
-            throw new IllegalStateException("No such path " + lastPath +" in yaml");
+        String lastPath = null;
+
+        if (!config.getProxy().isTckTests()) {
+            lastPath = path.substring(lastSlashIndex);
+            log.info("[handleRequest] lastPath: "  + lastPath);
+
+            if (!controlsByPath.containsKey(lastPath)) {
+                throw new IllegalStateException("No such path " + lastPath +" in yaml");
+            }
+        } else {
+            lastPath = path;
+            log.info("[handleRequest] lastPath: "  + lastPath);
         }
 
         Method method = resourceInfo.getResourceMethod();
@@ -455,7 +472,7 @@ public class LRAProxy {
 
         for (io.skoshchi.yaml.LRAProxy control : config.getProxy().getLra()) {
             if (control.getLraMethod() != null && control.getLraMethod() == methodType) {
-                actionPath = control.getPath().replaceAll("/", "");;
+                actionPath = control.getPath();
                 break;
             }
         }
@@ -464,7 +481,7 @@ public class LRAProxy {
             throw new IllegalArgumentException("No LRA control found for MethodType: " + methodType);
         }
 
-        String output = String.format("%s/%s/%s", baseUrl, "tcktests/" + serviceName, actionPath);
+        String output = String.format("%s/%s/%s", baseUrl, serviceName, actionPath);
 
         try {
             return new URI(output);
