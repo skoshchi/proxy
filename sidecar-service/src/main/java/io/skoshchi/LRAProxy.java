@@ -20,6 +20,7 @@ import org.yaml.snakeyaml.Yaml;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
@@ -40,6 +41,8 @@ import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.LRA_HTTP_CONTEXT
 public class LRAProxy {
 
     private String LRA_HTTP_HEADER = "Long-Running-Action";
+    public static final String STATUS_CODE_QUERY_NAME = "Coerce-Status";
+
 
     private static final Logger log = Logger.getLogger(LRAProxy.class.getName());
 
@@ -68,45 +71,50 @@ public class LRAProxy {
 
     @GET
     @Path("{path:.*}")
-    public Response proxyGet(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, @PathParam("path") String path) {
-        return handleRequest("GET", lraId, path);
+    public Response proxyGet(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId,
+                             @PathParam("path") String path) {
+        return handleRequest("GET", lraId, path, 200);
     }
 
     @POST
     @Path("{path:.*}")
-    public Response proxyPost(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, @PathParam("path") String path) {
-        return handleRequest("POST", lraId, path);
+    public Response proxyPost(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId,
+                              @PathParam("path") String path) {
+        return handleRequest("POST", lraId, path, 200);
     }
 
     @PUT
     @Path("{path:.*}")
-    public Response proxyPut(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, @PathParam("path") String path) {
-        return handleRequest("PUT", lraId, path);
+    public Response proxyPut(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId,
+                             @DefaultValue("200") @QueryParam(STATUS_CODE_QUERY_NAME) int coerceStatus,
+                             @PathParam("path") String path) {
+        return handleRequest("PUT", lraId, path, coerceStatus);
     }
 
     @DELETE
     @Path("{path:.*}")
-    public Response proxyDelete(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, @PathParam("path") String path) {
-        return handleRequest("DELETE", lraId, path);
+    public Response proxyDelete(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId,
+                                @PathParam("path") String path) {
+        return handleRequest("DELETE", lraId, path, 200);
     }
 
     @PATCH
     @Path("{path:.*}")
-    public Response proxyPatch(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, @PathParam("path") String path) {
-        return handleRequest("PATCH", lraId, path);
+    public Response proxyPatch(@HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId,
+                               @PathParam("path") String path) {
+        return handleRequest("PATCH", lraId, path, 200);
     }
 
-
-    public Response handleRequest(String method, URI lraId, String path) {
-        log.info("[handleRequest] " + method +
+    public Response handleRequest(String httpMethod, @HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, String path, int coerceStatus) {
+        log.info("[handleRequest] " + httpMethod +
                 " Incoming path: " + path +
                 " Header lraId: " + lraId);
 
         String[] parts = path.split("/");
 
-//        if (!parts[0].equals(config.getProxy().getService())) {
-//            throw new IllegalStateException("Service name is invalid: " + configPath);
-//        }
+        if (!parts[0].equals(config.getProxy().getService())) {
+            throw new IllegalStateException("Service name is invalid: " + configPath);
+        }
 
         String lastPath = parts.length > 1
                 ? "/" + String.join("/", java.util.Arrays.copyOfRange(parts, 1, parts.length)): "/";
@@ -115,6 +123,8 @@ public class LRAProxy {
             throw new IllegalStateException("No path " + lastPath +" in yaml");
         }
 
+        Method method = resourceInfo.getResourceMethod();
+        String clientId = method.getDeclaringClass().getName() + "#" + method.getName();
         io.skoshchi.yaml.LRAProxy lraProxy = controlsByPath.get(lastPath);
         LRA.Type type = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getType() : null;
         Long timeout = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getTimeLimit() : 0L;
@@ -125,7 +135,7 @@ public class LRAProxy {
         URI activeLRA = null;
         URI recoveryUrl = null;
         log.info("incomingLRA " + incomingLRA);
-
+        log.info("Incoming path" + path);
         try {
             if (type != null) {
                 switch (type) {
@@ -164,7 +174,7 @@ public class LRAProxy {
 
                     case NESTED:
                         if (incomingLRA != null) {
-                            activeLRA = narayanaLRAClient.startLRA(incomingLRA, "clientID", timeout, timeUnit);
+                            activeLRA = narayanaLRAClient.startLRA(incomingLRA, clientId, timeout, timeUnit);
                         } else {
                             return Response.status(Response.Status.PRECONDITION_FAILED)
                                     .entity("NESTED LRA required but no incoming LRA present")
@@ -177,13 +187,13 @@ public class LRAProxy {
                             activeLRA = incomingLRA;
                             log.info("Using incoming REQUIRED LRA: " + activeLRA);
                         } else {
-                            activeLRA = narayanaLRAClient.startLRA(null, "clientID", timeout, timeUnit);
+                            activeLRA = narayanaLRAClient.startLRA(null, clientId, timeout, timeUnit);
                             log.info("Started new REQUIRED LRA: " + activeLRA);
                         }
                         break;
 
                     case REQUIRES_NEW:
-                        activeLRA = narayanaLRAClient.startLRA(null, "clientID", timeout, timeUnit);
+                        activeLRA = narayanaLRAClient.startLRA(null, clientId, timeout, timeUnit);
                         log.info("Started REQUIRES_NEW LRA: " + activeLRA);
                         break;
 
@@ -195,26 +205,36 @@ public class LRAProxy {
             if (activeLRA != null && hasCompensatorConfig()) {
                 String compensatorLink = safeBuildCompensatorURI();
 
+                System.out.println("compensatorLink = " + compensatorLink);
                 narayanaLRAClient.enlistCompensator(activeLRA, timeout, compensatorLink, null);
                 log.info("Enlisted compensator for LRA: " + activeLRA);
             }
 
-//            Response proxyResponse = sendGetRequest(lastPath, "Proxy with LRA: " + activeLRA);
 
-            if (end && activeLRA != null) {
-                narayanaLRAClient.closeLRA(activeLRA);
-                log.info("Closed LRA: " + activeLRA);
+
+
+            Response response;
+            if (httpMethod.equals("GET")) {
+                response = sendGetRequest(lastPath, activeLRA, activeLRA.toString());
+            } else {
+                response = sendRequest(httpMethod, lastPath, activeLRA, activeLRA.toString(), coerceStatus);
             }
 
+            if (end && activeLRA != null) {
+                narayanaLRAClient.cancelLRA(activeLRA);
+
+                log.info("Closed LRA: " + activeLRA);
+            }
             Current.push(activeLRA);
             Current.addActiveLRACache(activeLRA);
-            return Response.status(Response.Status.OK)
-                    .entity("Test LRA " + activeLRA)
-                    .header(LRA_HTTP_HEADER, activeLRA != null ? activeLRA.toASCIIString() : "")
-                    .build();
 
+            return response;
         } catch (Exception e) {
-            return Response.serverError().entity("Error processing LRA: " + e.getMessage()).build();
+            log.severe("Exception in handleRequest: " + e.getMessage());
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .header("X-Error-Message", e.getMessage())
+                    .entity("Proxy error occurred")
+                    .build();
         }
     }
 
@@ -267,26 +287,89 @@ public class LRAProxy {
         b.append(link);
     }
 
-    private void niceStringOutput(String input) {
-        System.out.println("===========\n" + input + "\n===========");
-    }
-
-    private Response sendGetRequest(String pathSuffix, String successMessage) {
+    private Response sendGetRequest(String pathSuffix, URI activeLRA, String successMessage) {
         try {
-            String targetUrl = config.getProxy().getUrl() + "/" + config.getProxy().getService() + "/" + pathSuffix;
+            String targetUrl = config.getProxy().getUrl() + "/" + config.getProxy().getService() + pathSuffix;
             URI targetUri = URI.create(targetUrl);
 
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(targetUri)
-                    .GET()
-                    .build();
+                    .GET();
+
+            if (activeLRA != null) {
+                builder.header(LRA_HTTP_CONTEXT_HEADER, activeLRA.toASCIIString());
+            }
+
+            HttpRequest request = builder.build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            niceStringOutput(response.body());
+            log.info("[sendGetRequest] Response: " + response.body());
             return Response.ok(successMessage).build();
+        } catch (IllegalArgumentException e) {
+            log.severe("[sendGetRequest] Invalid URI: " + e.getMessage());
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("Invalid URI in request: " + e.getMessage())
+                    .build();
         } catch (Exception e) {
-            e.printStackTrace();
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Request error: " + e.getMessage()).build();
+            log.severe("[sendGetRequest] Exception: " + e.getMessage());
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .header("X-Error-Message", e.getMessage())
+                    .entity("Proxy error occurred")
+                    .build();
+        }
+    }
+
+    private Response sendRequest(String httpMethod, String pathSuffix, URI activeLRA, String successMessage, int coerceStatus) {
+        try {
+            String baseUrl = config.getProxy().getUrl() + "/" + config.getProxy().getService() + pathSuffix;
+            if ("PUT".equalsIgnoreCase(httpMethod)) {
+                String separator = baseUrl.contains("?") ? "&" : "?";
+                baseUrl += separator + STATUS_CODE_QUERY_NAME + "=" + coerceStatus;
+            }
+
+
+            URI targetUri = URI.create(baseUrl);
+
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(targetUri);
+
+            switch (httpMethod.toUpperCase()) {
+                case "POST":
+                    builder.POST(HttpRequest.BodyPublishers.noBody());
+                    break;
+                case "PUT":
+                    builder.PUT(HttpRequest.BodyPublishers.noBody());
+                    break;
+                case "DELETE":
+                    builder.DELETE();
+                    break;
+                case "PATCH":
+                    builder.method("PATCH", HttpRequest.BodyPublishers.noBody());
+                    break;
+                default:
+                    builder.GET();
+            }
+
+            if (activeLRA != null) {
+                builder.header(LRA_HTTP_CONTEXT_HEADER, activeLRA.toASCIIString());
+            }
+
+            HttpRequest request = builder.build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            log.info("[sendRequest] Response: " + response.body());
+            return Response.ok(successMessage).build();
+        } catch (IllegalArgumentException e) {
+            log.severe("[sendRequest] Invalid URI: " + e.getMessage());
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("Invalid URI in request: " + e.getMessage())
+                    .build();
+        } catch (Exception e) {
+            log.severe("[sendRequest] Exception: " + e.getMessage());
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .header("X-Error-Message", e.getMessage())
+                    .entity("Proxy error occurred")
+                    .build();
         }
     }
 
@@ -312,7 +395,7 @@ public class LRAProxy {
 
             if (control.getMethod() == null ||
                     !List.of("GET", "POST", "PUT", "DELETE", "PATCH").contains(control.getMethod().toUpperCase())) {
-                throw new RuntimeException(prefix + "'method' must be a valid HTTP method");
+                throw new RuntimeException(prefix + "'httpMethod' must be a valid HTTP method");
             }
 
             boolean hasSettings = control.getLraSettings() != null;
@@ -371,7 +454,7 @@ public class LRAProxy {
 
         for (io.skoshchi.yaml.LRAProxy control : config.getProxy().getLra()) {
             if (control.getLraMethod() != null && control.getLraMethod() == methodType) {
-                actionPath = control.getPath();
+                actionPath = control.getPath().replaceAll("/", "");;
                 break;
             }
         }
@@ -380,7 +463,7 @@ public class LRAProxy {
             throw new IllegalArgumentException("No LRA control found for MethodType: " + methodType);
         }
 
-        String output = String.format("%s/%s/%s", baseUrl, serviceName, actionPath);
+        String output = String.format("%s/%s/%s", baseUrl, "tcktests/" + serviceName, actionPath);
 
         try {
             return new URI(output);

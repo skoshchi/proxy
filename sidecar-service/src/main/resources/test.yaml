@@ -1,6 +1,8 @@
 proxy:
-  url: http://localhost:8082
-  service: hotel
+  url: http://127.0.0.1:8180
+#  url: http://localhost:8082
+  service: non-participating-tck-resource
+#  service: tcktests/non-participating-tck-resource
   lra:
     - path: /start-dont-end
       method: PUT
@@ -17,11 +19,23 @@ proxy:
         cancelOnFamily:
           - SERVER_ERROR
 
-    - path: /non-participating-tck-resource
+    - path: /after
       method: PUT
-      lraSettings:
-        type: SUPPORTS
-        end: false
+      lraMethod: AFTER_LRA
+
+#    - path: /complete
+#      method: PUT
+#      lraMethod: COMPLETE
+#
+#    - path: /compensate
+#      method: PUT
+#      lraMethod: COMPENSATE
+
+#    - path: /non-participating-tck-resource
+#      method: PUT
+#      lraSettings:
+#        type: SUPPORTS
+#        end: false
 
 #   this is hotel
 #
@@ -82,6 +96,3 @@ proxy:
 #      method: GET
 #      lraMethod: STATUS
 #
-#    - path: after-lra
-#      method: GET
-#      lraMethod: AFTER_LRA
