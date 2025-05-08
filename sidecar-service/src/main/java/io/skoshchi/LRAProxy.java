@@ -110,17 +110,18 @@ public class LRAProxy {
                 " Incoming path: " + path +
                 " Header lraId: " + lraId);
 
-        String[] parts = path.split("/");
+        int lastSlashIndex = path.lastIndexOf('/');
 
-        if (!parts[0].equals(config.getProxy().getService())) {
-            throw new IllegalStateException("Service name is invalid: " + configPath);
+        String basePath = path.substring(0, lastSlashIndex);
+        log.info("[handleRequest] basePath: "  + basePath);
+        if (!basePath.equals(config.getProxy().getService())) {
+            throw new IllegalStateException("Service path: " + basePath +
+                    " is wrong. Service path in yaml: " + config.getProxy().getService());
         }
 
-        String lastPath = parts.length > 1
-                ? "/" + String.join("/", java.util.Arrays.copyOfRange(parts, 1, parts.length)): "/";
-
+        String lastPath = path.substring(lastSlashIndex);
         if (!controlsByPath.containsKey(lastPath)) {
-            throw new IllegalStateException("No path " + lastPath +" in yaml");
+            throw new IllegalStateException("No such path " + lastPath +" in yaml");
         }
 
         Method method = resourceInfo.getResourceMethod();

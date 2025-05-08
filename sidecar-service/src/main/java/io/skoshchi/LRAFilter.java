@@ -21,6 +21,7 @@ public class LRAFilter implements ContainerRequestFilter, ContainerResponseFilte
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
         String lraHeader = requestContext.getHeaderString(LRA_HTTP_CONTEXT_HEADER);
+        System.out.println("In LRAFilter#filter requestContext ##########################################################################");
         if (lraHeader != null && !lraHeader.isEmpty()) {
             try {
                 URI lraId = URI.create(lraHeader);
@@ -34,6 +35,7 @@ public class LRAFilter implements ContainerRequestFilter, ContainerResponseFilte
 
     @Override
     public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext) throws IOException {
+        System.out.println("In LRAFilter#filter responseContext ##########################################################################");
         URI currentLRA = Current.peek();
         if (currentLRA != null) {
             responseContext.getHeaders().putSingle(LRA_HTTP_CONTEXT_HEADER, currentLRA.toASCIIString());
