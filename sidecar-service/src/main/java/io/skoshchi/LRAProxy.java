@@ -2,7 +2,8 @@ package io.skoshchi;
 
 import io.narayana.lra.Current;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
-import io.skoshchi.yaml.LRAProxyConfigFile;
+import io.skoshchi.yaml.LRAProxyConfig;
+import io.skoshchi.yaml.LRAProxyRouteConfig;
 import io.skoshchi.yaml.MethodType;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -40,8 +41,8 @@ import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.LRA_HTTP_CONTEXT
 @ApplicationScoped
 public class LRAProxy {
 
-    private String LRA_HTTP_HEADER = "Long-Running-Action";
-    public static final String STATUS_CODE_QUERY_NAME = "Coerce-Status";
+    private final String LRA_HTTP_HEADER = "Long-Running-Action";
+    private  final String STATUS_CODE_QUERY_NAME = "Coerce-Status";
 
 
     private static final Logger log = Logger.getLogger(LRAProxy.class.getName());
@@ -57,8 +58,8 @@ public class LRAProxy {
     @ConfigProperty(name = "proxy.config-path")
     public String configPath;
 
-    private LRAProxyConfigFile config;
-    private Map<String, io.skoshchi.yaml.LRAProxy> controlsByPath = new HashMap<>();
+    private LRAProxyConfig config;
+    private Map<String, LRAProxyRouteConfig> controlsByPath = new HashMap<>();
 
     @PostConstruct
     public void init() {
@@ -106,54 +107,29 @@ public class LRAProxy {
     }
 
     public Response handleRequest(String httpMethod, @HeaderParam(LRA_HTTP_CONTEXT_HEADER) URI lraId, String path, int coerceStatus) {
+        path = path.startsWith("/") ? path : "/" + path;
+
         log.info("[handleRequest] " + httpMethod +
                 " Incoming path: " + path +
                 " Header lraId: " + lraId);
 
-        int lastSlashIndex = path.indexOf('/');
-
-        String basePath = null;
-
-        if (!config.getProxy().isTckTests()) {
-            basePath = path.substring(0, lastSlashIndex);
-            log.info("[handleRequest] basePath: "  + basePath);
-
-            if (!basePath.equals(config.getProxy().getService())) {
-                throw new IllegalStateException("Service path: " + basePath +
-                        " is wrong. Service path in yaml: " + config.getProxy().getService());
-            }
-        } else {
-            basePath = config.getProxy().getService();
-            log.info("[handleRequest] basePath: "  + basePath);
-        }
-
-        String lastPath = null;
-
-        if (!config.getProxy().isTckTests()) {
-            lastPath = path.substring(lastSlashIndex);
-            log.info("[handleRequest] lastPath: "  + lastPath);
-
-            if (!controlsByPath.containsKey(lastPath)) {
-                throw new IllegalStateException("No such path " + lastPath +" in yaml");
-            }
-        } else {
-            lastPath = path;
-            log.info("[handleRequest] lastPath: "  + lastPath);
+        if (!controlsByPath.containsKey(path)) {
+            throw new IllegalStateException("No path found in yaml: " + path);
         }
 
         Method method = resourceInfo.getResourceMethod();
         String clientId = method.getDeclaringClass().getName() + "#" + method.getName();
-        io.skoshchi.yaml.LRAProxy lraProxy = controlsByPath.get(lastPath);
-        LRA.Type type = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getType() : null;
-        Long timeout = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getTimeLimit() : 0L;
-        ChronoUnit timeUnit = lraProxy.getLraSettings() != null ? lraProxy.getLraSettings().getTimeUnit() : ChronoUnit.SECONDS;
-        boolean end = lraProxy.getLraSettings() != null && lraProxy.getLraSettings().isEnd();
+        LRAProxyRouteConfig lraProxyRouteConfig = controlsByPath.get(path);
+
+        LRA.Type type = lraProxyRouteConfig.getLraSettings() != null ? lraProxyRouteConfig.getLraSettings().getType() : null;
+        Long timeout = lraProxyRouteConfig.getLraSettings() != null ? lraProxyRouteConfig.getLraSettings().getTimeLimit() : 0L;
+        ChronoUnit timeUnit = lraProxyRouteConfig.getLraSettings() != null ? lraProxyRouteConfig.getLraSettings().getTimeUnit() : ChronoUnit.SECONDS;
+        boolean end = lraProxyRouteConfig.getLraSettings() != null && lraProxyRouteConfig.getLraSettings().isEnd();
 
         URI incomingLRA = Current.peek();
         URI activeLRA = null;
-        URI recoveryUrl = null;
+
         log.info("incomingLRA " + incomingLRA);
-        log.info("Incoming path" + path);
         try {
             if (type != null) {
                 switch (type) {
@@ -233,9 +209,9 @@ public class LRAProxy {
 
             Response response;
             if (httpMethod.equals("GET")) {
-                response = sendGetRequest(lastPath, activeLRA, activeLRA.toString());
+                response = sendGetRequest(path, activeLRA, activeLRA.toString());
             } else {
-                response = sendRequest(httpMethod, lastPath, activeLRA, activeLRA.toString(), coerceStatus);
+                response = sendRequest(httpMethod, path, activeLRA, activeLRA.toString(), coerceStatus);
             }
 
             if (end && activeLRA != null) {
@@ -305,9 +281,9 @@ public class LRAProxy {
         b.append(link);
     }
 
-    private Response sendGetRequest(String pathSuffix, URI activeLRA, String successMessage) {
+    private Response sendGetRequest(String path, URI activeLRA, String successMessage) {
         try {
-            String targetUrl = config.getProxy().getUrl() + "/" + config.getProxy().getService() + pathSuffix;
+            String targetUrl = config.getProxy().getUrl() + "/" + path;
             URI targetUri = URI.create(targetUrl);
 
             HttpRequest.Builder builder = HttpRequest.newBuilder()
@@ -337,16 +313,17 @@ public class LRAProxy {
         }
     }
 
-    private Response sendRequest(String httpMethod, String pathSuffix, URI activeLRA, String successMessage, int coerceStatus) {
+    private Response sendRequest(String httpMethod, String path, URI activeLRA, String successMessage, int coerceStatus) {
         try {
-            String baseUrl = config.getProxy().getUrl() + "/" + config.getProxy().getService() + pathSuffix;
+            String targetUrl = config.getProxy().getUrl() + "/" + path;
+
             if ("PUT".equalsIgnoreCase(httpMethod)) {
-                String separator = baseUrl.contains("?") ? "&" : "?";
-                baseUrl += separator + STATUS_CODE_QUERY_NAME + "=" + coerceStatus;
+                String separator = targetUrl.contains("?") ? "&" : "?";
+                targetUrl += separator + STATUS_CODE_QUERY_NAME + "=" + coerceStatus;
             }
 
 
-            URI targetUri = URI.create(baseUrl);
+            URI targetUri = URI.create(targetUrl);
 
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(targetUri);
@@ -391,18 +368,18 @@ public class LRAProxy {
         }
     }
 
-    private LRAProxyConfigFile loadYamlConfig(String filePath) {
+    private LRAProxyConfig loadYamlConfig(String filePath) {
         Yaml yaml = new Yaml();
         try (InputStream inputStream = new FileInputStream(new File(filePath))) {
-            return yaml.loadAs(inputStream, LRAProxyConfigFile.class);
+            return yaml.loadAs(inputStream, LRAProxyConfig.class);
         } catch (Exception e) {
             throw new RuntimeException("Failed to load YAML: " + filePath, e);
         }
     }
 
 
-    private boolean isYamlOK(LRAProxyConfigFile config) throws RuntimeException {
-        List<io.skoshchi.yaml.LRAProxy> controls = config.getProxy().getLra();
+    private boolean isYamlOK(LRAProxyConfig config) throws RuntimeException {
+        List<LRAProxyRouteConfig> controls = config.getProxy().getLra();
         controls.forEach(control -> {
             int index = controls.indexOf(control);
             String prefix = "Error in lraControls[" + index + "]: ";
@@ -449,13 +426,13 @@ public class LRAProxy {
         return true;
     }
 
-    private Map<String, io.skoshchi.yaml.LRAProxy> getControlsByPath() {
-        Map<String, io.skoshchi.yaml.LRAProxy> controlsByPath = new HashMap<>();
+    private Map<String, LRAProxyRouteConfig> getControlsByPath() {
+        Map<String, LRAProxyRouteConfig> controlsByPath = new HashMap<>();
         if (config != null && config.getProxy() != null && config.getProxy().getLra() != null) {
-            for (io.skoshchi.yaml.LRAProxy control : config.getProxy().getLra()) {
-                if (control.getPath() != null) {
-                    controlsByPath.put(control.getPath(), control);
-                }
+            for (LRAProxyRouteConfig control : config.getProxy().getLra()) {
+                String normalizedPath = control.getPath().startsWith("/") ? control.getPath() : "/" + control.getPath();
+                controlsByPath.put(normalizedPath, control);
+
             }
         }
         return controlsByPath;
@@ -466,11 +443,10 @@ public class LRAProxy {
             throw new IllegalArgumentException("MethodType must not be null");
         }
 
-        String baseUrl = config.getProxy().getUrl();
-        String serviceName = config.getProxy().getService();
+        String targetUrl = config.getProxy().getUrl();
         String actionPath = null;
 
-        for (io.skoshchi.yaml.LRAProxy control : config.getProxy().getLra()) {
+        for (LRAProxyRouteConfig control : config.getProxy().getLra()) {
             if (control.getLraMethod() != null && control.getLraMethod() == methodType) {
                 actionPath = control.getPath();
                 break;
@@ -481,7 +457,7 @@ public class LRAProxy {
             throw new IllegalArgumentException("No LRA control found for MethodType: " + methodType);
         }
 
-        String output = String.format("%s/%s/%s", baseUrl, serviceName, actionPath);
+        String output = String.format("%s/%s", targetUrl, actionPath);
 
         try {
             return new URI(output);

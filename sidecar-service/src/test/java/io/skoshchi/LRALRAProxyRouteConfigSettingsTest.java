@@ -15,7 +15,7 @@ import static org.hamcrest.Matchers.equalTo;
 
 @QuarkusTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class LRAProxyTest {
+public class LRALRAProxyRouteConfigSettingsTest {
 
     @BeforeEach
     public void setUp() {

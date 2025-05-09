@@ -8,7 +8,7 @@ import static io.restassured.RestAssured.*;
 import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
-public class LRAProxyLraTest {
+public class LRALRAProxySettingsLraTestRouteConfig {
 
     @Test
     public void testStartOrder1CreatesNewLRA() {

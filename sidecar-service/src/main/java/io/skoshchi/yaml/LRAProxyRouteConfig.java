@@ -1,12 +1,12 @@
 package io.skoshchi.yaml;
 
-public class LRAProxy {
+public class LRAProxyRouteConfig {
     private String path;
     private String method;
     private LRASettings lraSettings;
     private MethodType lraMethod;
 
-    public LRAProxy() {
+    public LRAProxyRouteConfig() {
     }
 
     public String getPath() {
