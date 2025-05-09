@@ -112,7 +112,7 @@ proxy:
 #        type: MANDATORY
 #        end: false
 #
-    - path: lraresource/nestedActivity
+    - path: tcktests/lraresource/nestedActivity
       method: PUT
       lraSettings:
         type: NESTED
@@ -126,7 +126,7 @@ proxy:
 #        cancelOnFamily:
 #          - SERVER_ERROR
 #
-    - path: lraresource/multiLevelNestedActivity
+    - path: tcktests/lraresource/multiLevelNestedActivity
       method: PUT
       lraSettings:
         type: MANDATORY
