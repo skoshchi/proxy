@@ -4,6 +4,7 @@ import io.narayana.lra.Current;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
 import io.skoshchi.yaml.LRAProxyConfig;
 import io.skoshchi.yaml.LRAProxyRouteConfig;
+import io.skoshchi.yaml.LRASettings;
 import io.skoshchi.yaml.MethodType;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -59,7 +60,7 @@ public class LRAProxy {
     public String configPath;
 
     private LRAProxyConfig config;
-    private Map<String, LRAProxyRouteConfig> controlsByPath = new HashMap<>();
+    private Map<String, MapByLRAPath> controlsByPath = new HashMap<>();
 
     @PostConstruct
     public void init() {
@@ -119,12 +120,12 @@ public class LRAProxy {
 
         Method method = resourceInfo.getResourceMethod();
         String clientId = method.getDeclaringClass().getName() + "#" + method.getName();
-        LRAProxyRouteConfig lraProxyRouteConfig = controlsByPath.get(path);
+        MapByLRAPath lraProxyRouteConfig = controlsByPath.get(path);
 
-        LRA.Type type = lraProxyRouteConfig.getLraSettings() != null ? lraProxyRouteConfig.getLraSettings().getType() : null;
-        Long timeout = lraProxyRouteConfig.getLraSettings() != null ? lraProxyRouteConfig.getLraSettings().getTimeLimit() : 0L;
-        ChronoUnit timeUnit = lraProxyRouteConfig.getLraSettings() != null ? lraProxyRouteConfig.getLraSettings().getTimeUnit() : ChronoUnit.SECONDS;
-        boolean end = lraProxyRouteConfig.getLraSettings() != null && lraProxyRouteConfig.getLraSettings().isEnd();
+        LRA.Type type = lraProxyRouteConfig.getSettings() != null ? lraProxyRouteConfig.getSettings().getType() : null;
+        Long timeout = lraProxyRouteConfig.getSettings() != null ? lraProxyRouteConfig.getSettings().getTimeLimit() : 0L;
+        ChronoUnit timeUnit = lraProxyRouteConfig.getSettings() != null ? lraProxyRouteConfig.getSettings().getTimeUnit() : ChronoUnit.SECONDS;
+        boolean end = lraProxyRouteConfig.getSettings() != null && lraProxyRouteConfig.getSettings().isEnd();
 
         URI incomingLRA = Current.peek();
         URI activeLRA = null;
@@ -426,17 +427,32 @@ public class LRAProxy {
         return true;
     }
 
-    private Map<String, LRAProxyRouteConfig> getControlsByPath() {
-        Map<String, LRAProxyRouteConfig> controlsByPath = new HashMap<>();
+    private Map<String, MapByLRAPath> getControlsByPath() {
+        Map<String, MapByLRAPath> controlsByPath = new HashMap<>();
         if (config != null && config.getProxy() != null && config.getProxy().getLra() != null) {
             for (LRAProxyRouteConfig control : config.getProxy().getLra()) {
-                String normalizedPath = control.getPath().startsWith("/") ? control.getPath() : "/" + control.getPath();
-                controlsByPath.put(normalizedPath, control);
+                String rawPath = control.getPath();
+                if (rawPath != null) {
+                    String normalizedPath = rawPath.startsWith("/") ? rawPath : "/" + rawPath;
+                    String[] pathParts = normalizedPath.split("/");
+                    if (pathParts.length >= 3) {
+                        String trimmedPath = "/" + String.join("/", java.util.Arrays.copyOfRange(pathParts, 2, pathParts.length));
 
+                        String method = control.getMethod();
+                        LRASettings settings = control.getLraSettings();
+                        MethodType methodType = control.getLraMethod();
+
+                        String serviceName = pathParts[1];
+
+                        MapByLRAPath route = new MapByLRAPath(serviceName, method, settings, methodType);
+                        controlsByPath.put(trimmedPath, route);
+                    }
+                }
             }
         }
         return controlsByPath;
     }
+
 
     private URI getFullPathForLraMethod(MethodType methodType) {
         if (methodType == null) {

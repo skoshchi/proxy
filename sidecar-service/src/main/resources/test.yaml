@@ -2,7 +2,7 @@ proxy:
   url: http://127.0.0.1:8180
   lra:
     # NonParticipatingTckResource
-    - path: /non-participating-tck-resource/start-dont-end
+    - path: tcktests/non-participating-tck-resource/start-dont-end
       method: PUT
       lraSettings:
         type: REQUIRES_NEW
@@ -10,57 +10,57 @@ proxy:
         cancelOnFamily:
           - SERVER_ERROR
 
-    - path: /non-participating-tck-resource/end
+    - path: tcktests/non-participating-tck-resource/end
       method: PUT
       lraSettings:
         type: MANDATORY
         cancelOnFamily:
           - SERVER_ERROR
 
-    - path: /non-participating-tck-resource/after
+    - path: tcktests/non-participating-tck-resource/after
       method: PUT
       lraMethod: AFTER_LRA
 
-    - path: non-participating-tck-resource/never
-      method: PUT
-      lraSettings:
-        type: NEVER
-
-    - path: non-participating-tck-resource/supports
-      method: PUT
-      lraSettings:
-        type: SUPPORTS
-        end: false
-
-    - path: non-participating-tck-resource/start-and-end
-      method: PUT
-      lraSettings:
-        type: REQUIRES_NEW
-        cancelOnFamily:
-          - SERVER_ERROR
-
-    - path: non-participating-tck-resource/start-nested-and-end
-      method: PUT
-      lraSettings:
-        type: NESTED
-        cancelOnFamily:
-          - SERVER_ERROR
-
-    - path: non-participating-tck-resource/start-nested-and-dont-end
-      method: PUT
-      lraSettings:
-        type: NESTED
-        end: false
-        cancelOnFamily:
-          - SERVER_ERROR
-
-    - path: non-participating-tck-resource/start-via-remote-invocation
-      method: PUT
-      lraSettings:
-        type: SUPPORTS
-        end: false
-        cancelOnFamily:
-          - SERVER_ERROR
+#    - path: non-participating-tck-resource/never
+#      method: PUT
+#      lraSettings:
+#        type: NEVER
+#
+#    - path: non-participating-tck-resource/supports
+#      method: PUT
+#      lraSettings:
+#        type: SUPPORTS
+#        end: false
+#
+#    - path: non-participating-tck-resource/start-and-end
+#      method: PUT
+#      lraSettings:
+#        type: REQUIRES_NEW
+#        cancelOnFamily:
+#          - SERVER_ERROR
+#
+#    - path: non-participating-tck-resource/start-nested-and-end
+#      method: PUT
+#      lraSettings:
+#        type: NESTED
+#        cancelOnFamily:
+#          - SERVER_ERROR
+#
+#    - path: non-participating-tck-resource/start-nested-and-dont-end
+#      method: PUT
+#      lraSettings:
+#        type: NESTED
+#        end: false
+#        cancelOnFamily:
+#          - SERVER_ERROR
+#
+#    - path: non-participating-tck-resource/start-via-remote-invocation
+#      method: PUT
+#      lraSettings:
+#        type: SUPPORTS
+#        end: false
+#        cancelOnFamily:
+#          - SERVER_ERROR
 
     # LraResource
 #    - path: lraresource/status
@@ -71,13 +71,13 @@ proxy:
 #      method: PUT
 #      lraMethod: LEAVE
 #
-    - path: lraresource/complete
-      method: PUT
-      lraMethod: COMPLETE
-
-    - path: lraresource/compensate
-      method: PUT
-      lraMethod: COMPENSATE
+#    - path: lraresource/complete
+#      method: PUT
+#      lraMethod: COMPLETE
+#
+#    - path: lraresource/compensate
+#      method: PUT
+#      lraMethod: COMPENSATE
 #
 #    - path: lraresource/forget
 #      method: DELETE
