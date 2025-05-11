@@ -19,7 +19,7 @@ proxy:
 
     - path: tcktests/non-participating-tck-resource/after
       method: PUT
-      lraMethod: AFTER_LRA
+      lraMethod: AFTER
 
 #    - path: non-participating-tck-resource/never
 #      method: PUT
@@ -71,14 +71,14 @@ proxy:
 #      method: PUT
 #      lraMethod: LEAVE
 #
-#    - path: lraresource/complete
-#      method: PUT
-#      lraMethod: COMPLETE
-#
-#    - path: lraresource/compensate
-#      method: PUT
-#      lraMethod: COMPENSATE
-#
+    - path: tcktests/lraresource/complete
+      method: PUT
+      lraMethod: COMPLETE
+
+    - path: tcktests/lraresource/compensate
+      method: PUT
+      lraMethod: COMPENSATE
+
 #    - path: lraresource/forget
 #      method: DELETE
 #      lraMethod: FORGET
@@ -129,10 +129,8 @@ proxy:
     - path: tcktests/lraresource/multiLevelNestedActivity
       method: PUT
       lraSettings:
-        type: MANDATORY
+        type: NESTED
         end: false
-        cancelOnFamily:
-          - SERVER_ERROR
 
 
 #    - path: /complete

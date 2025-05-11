@@ -6,5 +6,5 @@ public enum MethodType {
     STATUS,
     FORGET,
     LEAVE,
-    AFTER_LRA
+    AFTER
 }
