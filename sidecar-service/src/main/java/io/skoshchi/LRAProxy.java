@@ -1,13 +1,17 @@
 package io.skoshchi;
 
 import io.narayana.lra.Current;
+import io.narayana.lra.client.LRAParticipantData;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
+import io.narayana.lra.filter.ServerLRAFilter;
+import io.narayana.lra.logging.LRALogger;
 import io.skoshchi.yaml.LRAProxyConfig;
 import io.skoshchi.yaml.LRAProxyRouteConfig;
 import io.skoshchi.yaml.LRASettings;
 import io.skoshchi.yaml.MethodType;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.client.ClientBuilder;
@@ -19,7 +23,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.client.Invocation.Builder;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.lra.annotation.AfterLRA;
 import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
 import org.yaml.snakeyaml.Yaml;
 
@@ -35,14 +38,20 @@ import java.util.*;
 import java.util.logging.Logger;
 
 import static io.narayana.lra.LRAConstants.*;
+import static jakarta.ws.rs.core.Response.Status.NOT_FOUND;
 import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.LRA_HTTP_CONTEXT_HEADER;
 
 @Path("")
 @ApplicationScoped
 public class LRAProxy {
-
     private final String LRA_HTTP_HEADER = "Long-Running-Action";
-    private  final String STATUS_CODE_QUERY_NAME = "Coerce-Status";
+    private final String STATUS_CODE_QUERY_NAME = "Coerce-Status";
+    private static final String CANCEL_ON_FAMILY_PROP = "CancelOnFamily";
+    private static final String CANCEL_ON_PROP = "CancelOn";
+    private static final String SUSPENDED_LRA_PROP = "suspendLRA";
+    private static final String CURRENT_LRA_PROP = "currentLRA";
+    private static final String ABORT_WITH_PROP = "abortWith";
+    private static final String TERMINAL_LRA_PROP = "terminateLRA";
 
 
     private static final Logger log = Logger.getLogger(LRAProxy.class.getName());
@@ -52,6 +61,9 @@ public class LRAProxy {
 
     @Inject
     NarayanaLRAClient narayanaLRAClient;
+
+    @Inject
+    LRAParticipantData data;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -199,12 +211,13 @@ public class LRAProxy {
                 }
             }
 
+            String compensatorLink = null;
             System.out.println("path " + path);
             System.out.println("getPathToResource(path) " + getPathToResource(path));
             if (activeLRA != null && hasCompensatorConfig(getPathToResource(path))) {
                 Map<MethodType, LRACompensator> compensatorsMap = compensatorsByPath.get(getPathToResource(path));
 
-                String compensatorLink = buildCompensatorURI(
+                compensatorLink = buildCompensatorURI(
                         toURI(compensatorsMap.containsKey(MethodType.COMPENSATE) ? compensatorsMap.get(MethodType.COMPENSATE).getPath(): null),
                         toURI(compensatorsMap.containsKey(MethodType.COMPLETE) ? compensatorsMap.get(MethodType.COMPLETE).getPath(): null),
                         toURI(compensatorsMap.containsKey(MethodType.FORGET) ? compensatorsMap.get(MethodType.FORGET).getPath(): null),
@@ -223,6 +236,101 @@ public class LRAProxy {
             response = sendRequest(httpMethod, path, activeLRA, activeLRA.toString(), coerceStatus);
 
 
+            boolean isCancel = isJaxRsCancel(response);
+            Object suspendedLRA = response.getMetadata().getFirst(SUSPENDED_LRA_PROP);
+            URI current = (URI) response.getMetadata().getFirst(CURRENT_LRA_PROP);
+            ArrayList<Progress> progress = cast(response.getMetadata().getFirst(ABORT_WITH_PROP));
+            URI toClose = (URI) response.getMetadata().getFirst(TERMINAL_LRA_PROP);
+            String userData = getUserDefinedData();
+
+
+            try {
+                if (activeLRA != null && isCancel) {
+                    try {
+                        if (progress == null || progressDoesNotContain(progress, ProgressStep.StartFailed)) {
+                            narayanaLRAClient.cancelLRA(current);
+                            progress = updateProgress(progress, ProgressStep.Ended, null);
+                        }
+                    } catch (NotFoundException ignore) {
+                        // must already be cancelled (if the intercepted method caused it to cancel)
+                        // or completed (if the intercepted method caused it to complete)
+                        progress = updateProgress(progress, ProgressStep.Ended, null);
+                    } catch (WebApplicationException e) {
+                        progress = updateProgress(progress, ProgressStep.CancelFailed, e.getMessage());
+                    } catch (ProcessingException e) {
+                        method = resourceInfo.getResourceMethod();
+                        LRALogger.i18nLogger.warn_lraFilterContainerRequest("ProcessingException: " + e.getMessage(),
+                                method.getDeclaringClass().getName() + "#" + method.getName(), current.toASCIIString());
+
+                        progress = updateProgress(progress, ProgressStep.CancelFailed, e.getMessage());
+                        toClose = null;
+                    } finally {
+                        if (current.toASCIIString().equals(
+                                Current.getLast(response.getHeaders().get(LRA_HTTP_CONTEXT_HEADER)))) {
+                            // the callers context was ended so invalidate it
+                            response.getHeaders().remove(LRA_HTTP_CONTEXT_HEADER);
+                        }
+
+                        if (toClose != null && toClose.toASCIIString().equals(current.toASCIIString())) {
+                            toClose = null; // don't attempt to finish the LRA twice
+                        }
+                    }
+                }
+            } finally {
+                if (suspendedLRA != null) {
+                    Current.push((URI) suspendedLRA);
+                }
+
+                lraId = Current.peek();
+
+                if (lraId != null) {
+                    response.getHeaders().add("Long-Running-Action", Current.getContexts());
+                } else {
+                    response.getHeaders().remove("Long-Running-Action");
+                }
+                Current.popAll();
+                Current.removeActiveLRACache(current);
+            }
+
+            if (toClose != null) {
+                try {
+                    // do not attempt to close or cancel if the request filter tried but failed to start a new LRA
+                    if (progress == null || progressDoesNotContain(progress, ProgressStep.StartFailed)) {
+                        if (isCancel) {
+                            narayanaLRAClient.cancelLRA(toClose, compensatorLink, getUserDefinedData());
+                        } else {
+                            narayanaLRAClient.closeLRA(toClose, compensatorLink, getUserDefinedData());
+                        }
+
+                        progress = updateProgress(progress, ProgressStep.Ended, null);
+                    }
+                } catch (WebApplicationException e) {
+                    if (e.getResponse().getStatus() == NOT_FOUND.getStatusCode()) {
+                        // must already be cancelled (if the intercepted method caused it to cancel)
+                        // or completed (if the intercepted method caused it to complete
+                        progress = updateProgress(progress, ProgressStep.Ended, null);
+                    } else {
+                        // same as ProcessingException case
+                        progress = updateProgress(progress,
+                                isCancel ? ProgressStep.CancelFailed : ProgressStep.CloseFailed, e.getMessage());
+                    }
+                } catch (ProcessingException e) {
+                    progress = updateProgress(progress,
+                            isCancel ? ProgressStep.CancelFailed : ProgressStep.CloseFailed, e.getMessage());
+                } finally {
+                    response.getHeaders().remove(LRA_HTTP_CONTEXT_HEADER);
+
+                    if (toClose.toASCIIString().equals(
+                            Current.getLast(response.getHeaders().get(LRA_HTTP_CONTEXT_HEADER)))) {
+                        // the callers context was ended so invalidate it
+                        response.getHeaders().remove(LRA_HTTP_CONTEXT_HEADER);
+                    }
+                }
+            } else if (current != null && compensatorLink != null && userData != null) {
+                narayanaLRAClient.enlistCompensator(current, 0L, compensatorLink, new StringBuilder(userData));
+            }
+
+
             if (end && activeLRA != null) {
                 narayanaLRAClient.cancelLRA(activeLRA);
 
@@ -239,6 +347,49 @@ public class LRAProxy {
                     .entity("Proxy error occurred")
                     .build();
         }
+    }
+
+    private boolean isJaxRsCancel(Response response) {
+        int status = response.getStatus();
+        Response.Status.Family[] cancelOnFamily = (Response.Status.Family[]) response.getMetadata().getFirst(CANCEL_ON_FAMILY_PROP);
+        Response.Status[] cancelOn = (Response.Status[]) response.getMetadata().getFirst(CANCEL_ON_PROP);
+
+        if (cancelOnFamily != null) {
+            if (Arrays.stream(cancelOnFamily).anyMatch(f -> Response.Status.Family.familyOf(status) == f)) {
+                return true;
+            }
+        }
+
+        if (cancelOn != null) {
+            return Arrays.stream(cancelOn).anyMatch(f -> status == f.getStatusCode());
+        }
+
+        return false;
+    }
+
+    private String getUserDefinedData() {
+        try {
+            return data != null ? data.getData() : null;
+        } catch (ContextNotActiveException e) {
+            LRALogger.i18nLogger.warn_missingContexts("CDI bean of type LRAParticipantData is not available", e);
+        }
+
+        return null;
+    }
+
+    private ArrayList<Progress> updateProgress(ArrayList<Progress> progress, ProgressStep step, String reason) {
+        if (reason == null) {
+            LRALogger.logger.debug(step.toString());
+        } else {
+
+            if (progress == null) {
+                progress = new ArrayList<>();
+            }
+
+            progress.add(new Progress(step, reason));
+        }
+
+        return progress;
     }
 
     private boolean hasCompensatorConfig(String path) {
@@ -269,6 +420,10 @@ public class LRAProxy {
         }
     }
 
+    private boolean progressDoesNotContain(ArrayList<Progress> progress, ProgressStep step) {
+        return progress.stream().noneMatch(p -> p.progress == step);
+    }
+
     private URI getFullPathForLraMethodSafe(MethodType methodType) {
         try {
             return getFullPathForLraMethod(methodType);
@@ -277,6 +432,54 @@ public class LRAProxy {
         }
     }
 
+    private static class Progress {
+        static EnumSet<ProgressStep> failures = EnumSet.of(
+                ProgressStep.LeaveFailed,
+                ProgressStep.StartFailed,
+                ProgressStep.JoinFailed,
+                ProgressStep.CloseFailed,
+                ProgressStep.CancelFailed);
+
+        ProgressStep progress;
+        String reason;
+
+        public Progress(ProgressStep progress, String reason) {
+            this.progress = progress;
+            this.reason = reason;
+        }
+
+        public boolean wasSuccessful() {
+            return !failures.contains(progress);
+        }
+    }
+
+    private enum ProgressStep {
+        Left ("leave succeeded"),
+        LeaveFailed("leave failed"),
+        Started("start succeeded"),
+        StartFailed("start failed"),
+        Joined("join succeeded"),
+        JoinFailed("join failed"),
+        Ended("end succeeded"),
+        CloseFailed("close failed"),
+        CancelFailed("cancel failed");
+
+        final String status;
+
+        ProgressStep(final String status) {
+            this.status = status;
+        }
+
+        @Override
+        public String toString() {
+            return status;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T extends Collection<?>> T cast(Object obj) {
+        return (T) obj;
+    }
 
     private static void makeLink(StringBuilder b, String key, URI value) {
         if (key == null || value == null) {
@@ -333,7 +536,7 @@ public class LRAProxy {
 
             String body = response.readEntity(String.class);
             log.info("[sendRequest] Response: " + body);
-            return Response.ok(successMessage).build();
+            return response;
 
         } catch (IllegalArgumentException e) {
             log.severe("[sendRequest] Invalid URI: " + e.getMessage());
