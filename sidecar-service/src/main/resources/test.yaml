@@ -21,56 +21,56 @@ proxy:
       method: PUT
       lraMethod: AFTER
 
-#    - path: non-participating-tck-resource/never
-#      method: PUT
-#      lraSettings:
-#        type: NEVER
-#
-#    - path: non-participating-tck-resource/supports
-#      method: PUT
-#      lraSettings:
-#        type: SUPPORTS
-#        end: false
-#
-#    - path: non-participating-tck-resource/start-and-end
-#      method: PUT
-#      lraSettings:
-#        type: REQUIRES_NEW
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
-#    - path: non-participating-tck-resource/start-nested-and-end
-#      method: PUT
-#      lraSettings:
-#        type: NESTED
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
-#    - path: non-participating-tck-resource/start-nested-and-dont-end
-#      method: PUT
-#      lraSettings:
-#        type: NESTED
-#        end: false
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
-#    - path: non-participating-tck-resource/start-via-remote-invocation
-#      method: PUT
-#      lraSettings:
-#        type: SUPPORTS
-#        end: false
-#        cancelOnFamily:
-#          - SERVER_ERROR
+    - path: tcktests/non-participating-tck-resource/never
+      method: PUT
+      lraSettings:
+        type: NEVER
 
-    # LraResource
-#    - path: lraresource/status
-#      method: GET
-#      lraMethod: STATUS
-#
-#    - path: lraresource/leave
-#      method: PUT
-#      lraMethod: LEAVE
-#
+    - path: tcktests/non-participating-tck-resource/supports
+      method: PUT
+      lraSettings:
+        type: SUPPORTS
+        end: false
+
+    - path: tcktests/non-participating-tck-resource/start-and-end
+      method: PUT
+      lraSettings:
+        type: REQUIRES_NEW
+        cancelOnFamily:
+          - SERVER_ERROR
+
+    - path: tcktests/non-participating-tck-resource/start-nested-and-end
+      method: PUT
+      lraSettings:
+        type: NESTED
+        cancelOnFamily:
+          - SERVER_ERROR
+
+    - path: tcktests/non-participating-tck-resource/start-nested-and-dont-end
+      method: PUT
+      lraSettings:
+        type: NESTED
+        end: false
+        cancelOnFamily:
+          - SERVER_ERROR
+
+    - path: tcktests/non-participating-tck-resource/start-via-remote-invocation
+      method: PUT
+      lraSettings:
+        type: SUPPORTS
+        end: false
+        cancelOnFamily:
+          - SERVER_ERROR
+
+
+    - path: tcktests/lraresource/status
+      method: GET
+      lraMethod: STATUS
+
+    - path: tcktests/lraresource/leave
+      method: PUT
+      lraMethod: LEAVE
+
     - path: tcktests/lraresource/complete
       method: PUT
       lraMethod: COMPLETE
@@ -83,57 +83,57 @@ proxy:
       method: PUT
       lraMethod: AFTER
 
-#    - path: lraresource/forget
-#      method: DELETE
-#      lraMethod: FORGET
-#
-#    - path: lraresource/acceptWork
-#      method: PUT
-#      lraSettings:
-#        type: REQUIRED
-#        end: false
-#
-#    - path: lraresource/supports
-#      method: PUT
-#      lraSettings:
-#        type: SUPPORTS
-#        end: false
-#
-#    - path: lraresource/startViaApi
-#      method: PUT
-#      lraSettings:
-#        type: NOT_SUPPORTED
-#
-#    - path: lraresource/work
-#      method: PUT
-#      lraSettings:
-#        type: REQUIRED
-#        end: false
-#
-#    - path: lraresource/mandatory
-#      method: PUT
-#      lraSettings:
-#        type: MANDATORY
-#        end: false
-#
+    - path: tcktests/lraresource/forget
+      method: DELETE
+      lraMethod: FORGET
+
+    - path: tcktests/lraresource/acceptWork
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+        end: false
+
+    - path: tcktests/lraresource/supports
+      method: PUT
+      lraSettings:
+        type: SUPPORTS
+        end: false
+
+    - path: tcktests/lraresource/startViaApi
+      method: PUT
+      lraSettings:
+        type: NOT_SUPPORTED
+
+    - path: tcktests/lraresource/work
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+        end: false
+
+    - path: tcktests/lraresource/mandatory
+      method: PUT
+      lraSettings:
+        type: MANDATORY
+        end: false
+
     - path: tcktests/lraresource/nestedActivity
       method: PUT
       lraSettings:
         type: NESTED
         end: true
-#
-#    - path: lraresource/cancel
-#      method: PUT
-#      lraSettings:
-#        type: MANDATORY
-#        end: true
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
+
+    - path: tcktests/lraresource/cancel
+      method: PUT
+      lraSettings:
+        type: MANDATORY
+        end: true
+        cancelOnFamily:
+          - SERVER_ERROR
+
     - path: tcktests/lraresource/multiLevelNestedActivity
       method: PUT
       lraSettings:
-        type: NESTED
+        type: MANDATORY
         end: false
 
 
@@ -144,7 +144,7 @@ proxy:
 #    - path: /compensate
 #      method: PUT
 #      lraMethod: COMPENSATE
-
+#
 #    - path: /non-participating-tck-resource
 #      method: PUT
 #      lraSettings:

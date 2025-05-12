@@ -219,11 +219,9 @@ public class LRAProxy {
             }
 
             Response response;
-            if (httpMethod.equals("GET")) {
-                response = sendGetRequest(path, activeLRA, activeLRA.toString());
-            } else {
-                response = sendRequest(httpMethod, path, activeLRA, activeLRA.toString(), coerceStatus);
-            }
+
+            response = sendRequest(httpMethod, path, activeLRA, activeLRA.toString(), coerceStatus);
+
 
             if (end && activeLRA != null) {
                 narayanaLRAClient.cancelLRA(activeLRA);
@@ -295,39 +293,6 @@ public class LRAProxy {
         b.append(link);
     }
 
-    private Response sendGetRequest(String path, URI activeLRA, String successMessage) {
-        try {
-            String targetUrl = config.getProxy().getUrl() + "/" + path;
-
-            Builder builder =
-                    ClientBuilder.newClient().
-                            target(targetUrl).
-                            request();
-
-            if (activeLRA != null) {
-                builder.header(LRA_HTTP_CONTEXT_HEADER, activeLRA.toASCIIString());
-            }
-
-            Response response = builder.get();
-            String body = response.readEntity(String.class);
-            log.info("[sendRequest] Response: " + body);
-            return Response.ok(successMessage).build();
-
-        } catch (IllegalArgumentException e) {
-            log.severe("[sendRequest] Invalid URI: " + e.getMessage());
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity("Invalid URI in request: " + e.getMessage())
-                    .build();
-
-        } catch (Exception e) {
-            log.severe("[sendRequest] Exception: " + e.getMessage());
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .header("X-Error-Message", e.getMessage())
-                    .entity("Proxy error occurred")
-                    .build();
-        }
-    }
-
     private Response sendRequest(String httpMethod, String path, URI activeLRA, String successMessage, int coerceStatus) {
         try {
             String targetUrl = config.getProxy().getUrl() + "/" + path;
@@ -337,16 +302,19 @@ public class LRAProxy {
                 targetUrl += separator + STATUS_CODE_QUERY_NAME + "=" + coerceStatus;
             }
 
-            Builder builder =
-                    ClientBuilder.newClient().
-                    target(targetUrl).
-                    request();
+            Builder builder = ClientBuilder.newClient()
+                    .target(targetUrl)
+                    .request();
 
             if (activeLRA != null) {
                 builder.header(LRA_HTTP_CONTEXT_HEADER, activeLRA.toASCIIString());
             }
+
             Response response;
             switch (httpMethod.toUpperCase()) {
+                case "GET":
+                    response = builder.get();
+                    break;
                 case "POST":
                     response = builder.post(null);
                     break;
@@ -360,28 +328,26 @@ public class LRAProxy {
                     response = builder.method("PATCH", Entity.text(""));
                     break;
                 default:
-                    response = builder.get();
+                    throw new IllegalArgumentException("Unsupported HTTP method: " + httpMethod);
             }
 
             String body = response.readEntity(String.class);
             log.info("[sendRequest] Response: " + body);
             return Response.ok(successMessage).build();
 
-            } catch (IllegalArgumentException e) {
-                log.severe("[sendRequest] Invalid URI: " + e.getMessage());
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity("Invalid URI in request: " + e.getMessage())
-                        .build();
-
-            } catch (Exception e) {
-                log.severe("[sendRequest] Exception: " + e.getMessage());
-                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                        .header("X-Error-Message", e.getMessage())
-                        .entity("Proxy error occurred")
-                        .build();
+        } catch (IllegalArgumentException e) {
+            log.severe("[sendRequest] Invalid URI: " + e.getMessage());
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("Invalid URI in request: " + e.getMessage())
+                    .build();
+        } catch (Exception e) {
+            log.severe("[sendRequest] Exception: " + e.getMessage());
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .header("X-Error-Message", e.getMessage())
+                    .entity("Proxy error occurred")
+                    .build();
         }
     }
-
 
     private LRAProxyConfig loadYamlConfig(String filePath) {
         Yaml yaml = new Yaml();
