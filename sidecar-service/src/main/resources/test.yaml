@@ -79,6 +79,10 @@ proxy:
       method: PUT
       lraMethod: COMPENSATE
 
+    - path: tcktests/lraresource/after
+      method: PUT
+      lraMethod: AFTER
+
 #    - path: lraresource/forget
 #      method: DELETE
 #      lraMethod: FORGET

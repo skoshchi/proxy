@@ -19,6 +19,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.client.Invocation.Builder;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.lra.annotation.AfterLRA;
 import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
 import org.yaml.snakeyaml.Yaml;
 
@@ -30,9 +31,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.logging.Logger;
 
 import static io.narayana.lra.LRAConstants.*;
@@ -61,6 +60,7 @@ public class LRAProxy {
 
     private LRAProxyConfig config;
     private Map<String, MapByLRAPath> controlsByPath = new HashMap<>();
+    private Map<String, Map<MethodType, LRACompensator>> compensatorsByPath = new HashMap<>();
 
     @PostConstruct
     public void init() {
@@ -69,7 +69,9 @@ public class LRAProxy {
             throw new IllegalStateException("YAML configuration is invalid: " + configPath);
         }
         controlsByPath = getControlsByPath();
+        compensatorsByPath = getCompensatorsByPathToResource();
     }
+
 
     @GET
     @Path("{path:.*}")
@@ -197,11 +199,22 @@ public class LRAProxy {
                 }
             }
 
-            if (activeLRA != null && hasCompensatorConfig()) {
-                String compensatorLink = safeBuildCompensatorURI();
+            System.out.println("path " + path);
+            System.out.println("getPathToResource(path) " + getPathToResource(path));
+            if (activeLRA != null && hasCompensatorConfig(getPathToResource(path))) {
+                Map<MethodType, LRACompensator> compensatorsMap = compensatorsByPath.get(getPathToResource(path));
+
+                String compensatorLink = buildCompensatorURI(
+                        toURI(compensatorsMap.containsKey(MethodType.COMPENSATE) ? compensatorsMap.get(MethodType.COMPENSATE).getPath(): null),
+                        toURI(compensatorsMap.containsKey(MethodType.COMPLETE) ? compensatorsMap.get(MethodType.COMPLETE).getPath(): null),
+                        toURI(compensatorsMap.containsKey(MethodType.FORGET) ? compensatorsMap.get(MethodType.FORGET).getPath(): null),
+                        toURI(compensatorsMap.containsKey(MethodType.LEAVE) ? compensatorsMap.get(MethodType.LEAVE).getPath(): null),
+                        toURI(compensatorsMap.containsKey(MethodType.AFTER) ? compensatorsMap.get(MethodType.AFTER).getPath(): null),
+                        toURI(compensatorsMap.containsKey(MethodType.STATUS) ? compensatorsMap.get(MethodType.STATUS).getPath(): null));
 
                 System.out.println("compensatorLink = " + compensatorLink);
                 narayanaLRAClient.enlistCompensator(activeLRA, timeout, compensatorLink, null);
+
                 log.info("Enlisted compensator for LRA: " + activeLRA);
             }
 
@@ -230,21 +243,24 @@ public class LRAProxy {
         }
     }
 
-    private boolean hasCompensatorConfig() {
-        return config.getProxy().getLra().stream()
-                .anyMatch(control -> control.getLraMethod() == MethodType.COMPENSATE
-                        || control.getLraMethod() == MethodType.AFTER);
+    private boolean hasCompensatorConfig(String path) {
+        if (compensatorsByPath.containsKey(path)) {
+            Map<MethodType, LRACompensator> innerMap = compensatorsByPath.get(path);
+            return innerMap.containsKey(MethodType.COMPENSATE) || innerMap.containsKey(MethodType.AFTER);
+        } else {
+            return false;
+        }
     }
 
-    private String safeBuildCompensatorURI() {
+    private String buildCompensatorURI(URI compensate, URI complete, URI forget, URI leave, URI after, URI status) {
          StringBuilder linkHeaderValue = new StringBuilder();
 
-        appendLinkIfExists(linkHeaderValue, COMPENSATE, getFullPathForLraMethodSafe(MethodType.COMPENSATE));
-        appendLinkIfExists(linkHeaderValue, COMPLETE, getFullPathForLraMethodSafe(MethodType.COMPLETE));
-        appendLinkIfExists(linkHeaderValue, FORGET, getFullPathForLraMethodSafe(MethodType.FORGET));
-        appendLinkIfExists(linkHeaderValue, LEAVE, getFullPathForLraMethodSafe(MethodType.LEAVE));
-        appendLinkIfExists(linkHeaderValue, AFTER, getFullPathForLraMethodSafe(MethodType.AFTER));
-        appendLinkIfExists(linkHeaderValue, STATUS, getFullPathForLraMethodSafe(MethodType.STATUS));
+        makeLink(linkHeaderValue, COMPENSATE, compensate);
+        makeLink(linkHeaderValue, COMPLETE, complete);
+        makeLink(linkHeaderValue, FORGET, forget);
+        makeLink(linkHeaderValue, LEAVE, leave);
+        makeLink(linkHeaderValue, AFTER, after);
+        makeLink(linkHeaderValue, STATUS, status);
 
         return linkHeaderValue.toString();
     }
@@ -427,7 +443,7 @@ public class LRAProxy {
 
     private Map<String, MapByLRAPath> getControlsByPath() {
         Map<String, MapByLRAPath> controlsByPath = new HashMap<>();
-        if (config != null && config.getProxy() != null && config.getProxy().getLra() != null) {
+        if (config != null && config.getProxy()!= null && config.getProxy().getLra() != null) {
             for (LRAProxyRouteConfig control : config.getProxy().getLra()) {
                 String rawPath = control.getPath();
                 if (rawPath != null) {
@@ -451,6 +467,27 @@ public class LRAProxy {
         return controlsByPath;
     }
 
+    private Map<String, Map<MethodType, LRACompensator>> getCompensatorsByPathToResource() {
+        Map<String, Map<MethodType, LRACompensator>> compensators = new HashMap<>();
+
+        if (config != null && config.getProxy()!= null && config.getProxy().getLra() != null) {
+            for (LRAProxyRouteConfig control : config.getProxy().getLra()) {
+                if(control.getLraMethod() != null) {
+                    String pathToResource = getPathToResource(control.getPath());
+
+                    if (compensators.containsKey(pathToResource)) {
+                        compensators.get(pathToResource)
+                                .put(control.getLraMethod(), new LRACompensator(config.getProxy().getUrl() + "/" + control.getPath(), control.getMethod()));
+                    } else {
+                        compensators.put(pathToResource, new HashMap<>());
+                        compensators.get(pathToResource)
+                                .put(control.getLraMethod(), new LRACompensator(config.getProxy().getUrl() + "/"  + control.getPath(), control.getMethod()));
+                    }
+                }
+            }
+        }
+        return compensators;
+    }
 
     private URI getFullPathForLraMethod(MethodType methodType) {
         if (methodType == null) {
@@ -479,4 +516,56 @@ public class LRAProxy {
             throw new RuntimeException("Failed to create URI from: " + output, e);
         }
     }
+
+    private List<LRAProxyRouteConfig> findEligibleCompensators(String requestPath) {
+        String trimmedPath = requestPath.startsWith("/") ? requestPath.substring(1) : requestPath;
+        String[] segments = trimmedPath.split("/");
+        String servicePrefix;
+
+        if (segments.length >= 3) {
+            servicePrefix = segments[0] + "/" + segments[1];
+        } else {
+            servicePrefix = trimmedPath;
+        }
+
+        List<LRAProxyRouteConfig> eligibleList = new ArrayList<>();
+        for (LRAProxyRouteConfig compensator : config.getProxy().getLra()) {
+            String compPath = compensator.getPath().substring(0, compensator.getPath().lastIndexOf('/'));
+            MethodType lraMethod = compensator.getLraMethod();
+
+            if (lraMethod != null) {
+                if (compPath.startsWith("/" + servicePrefix) || compPath.equals(servicePrefix)) {
+                    eligibleList.add(compensator);
+                }
+            }
+        }
+        return eligibleList;
+    }
+
+    private String getServiceName(String requestPath) {
+        String[] segments = requestPath.split("/");
+        String serviceName;
+
+        if (segments.length >= 3) {
+            serviceName = segments[0] + "/" + segments[1];
+        } else {
+            serviceName = requestPath;
+        }
+        return serviceName;
+    }
+
+    private String getPathToResource(String requestPath) {
+        String[] parts = requestPath.split("/");
+
+        if (parts.length <= 2) {
+            return parts[0];
+        } else {
+            return String.join("/", Arrays.copyOfRange(parts, 1, parts.length - 1));
+        }
+    }
+
+    private URI toURI(String uri) throws URISyntaxException {
+        return uri == null ? null : new URI(uri);
+    }
+
 }
