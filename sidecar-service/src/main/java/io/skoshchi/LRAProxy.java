@@ -178,7 +178,7 @@ public class LRAProxy {
         if (lraId != null) {
             incomingLRA = lraId;
 
-            if (compensatorsByPath.get(path).containsKey(MethodType.LEAVE)) {
+            if (compensatorsByPath.get(getPathToResource(path)).containsKey(MethodType.LEAVE)) {
 
                 Map<String, String> terminateURIs = buildTerminationUrisFromCompensators(compensatorsByPath, path, coerceStatus);
                 String compensatorId = terminateURIs.get("Link");
@@ -358,7 +358,6 @@ public class LRAProxy {
             }
         }
 
-        Current.push(lraId);
 
         try {
             narayanaLRAClient.setCurrentLRA(lraId); // make the current LRA available to the called method
@@ -407,8 +406,6 @@ public class LRAProxy {
 
                     progress = updateProgress(progress, ProgressStep.Joined, null);
 
-                    headers.putSingle(LRA_HTTP_RECOVERY_HEADER,
-                            Pattern.compile("^\"|\"$").matcher(recoveryUrl.toASCIIString()).replaceAll(""));
                 } catch (WebApplicationException e) {
                     String reason = e.getMessage();
 
@@ -920,7 +917,7 @@ public class LRAProxy {
         return serviceName;
     }
 
-    private String getPathToResource(String requestPath) {
+    private static String getPathToResource(String requestPath) {
         String[] parts = requestPath.split("/");
 
         if (parts.length <= 2) {
@@ -941,9 +938,9 @@ public class LRAProxy {
         Map<String, String> paths = new HashMap<>();
         String timeoutValue = Long.toString(timeout);
 
-        System.out.println("compensatorsByPath.get(pathToResource) = " + compensatorsByPath.get(pathToResource));
+        System.out.println("compensatorsByPath.get(pathToResource) = " + compensatorsByPath.get(getPathToResource(pathToResource)));
         System.out.println("pathToResource = " + pathToResource);
-        Map<MethodType, LRACompensator> compensatorMap = compensatorsByPath.get(getServiceName(pathToResource));
+        Map<MethodType, LRACompensator> compensatorMap = compensatorsByPath.get(getPathToResource(pathToResource));
         if (compensatorMap == null) {
             throw new IllegalArgumentException("No compensators registered for path: " + pathToResource);
         }
