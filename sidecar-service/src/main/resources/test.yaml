@@ -21,113 +21,113 @@ proxy:
       method: PUT
       lraMethod: AFTER
 
-#    - path: tck/non-participating-tck-resource/never
-#      method: PUT
-#      lraSettings:
-#        type: NEVER
-#
-#    - path: tck/non-participating-tck-resource/supports
-#      method: PUT
-#      lraSettings:
-#        type: SUPPORTS
-#        end: false
-#
-#    - path: tck/non-participating-tck-resource/start-nested-and-end
-#      method: PUT
-#      lraSettings:
-#        type: NESTED
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
-#    - path: tck/non-participating-tck-resource/start-nested-and-dont-end
-#      method: PUT
-#      lraSettings:
-#        type: NESTED
-#        end: false
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
-#    - path: tck/non-participating-tck-resource/start-via-remote-invocation
-#      method: PUT
-#      lraSettings:
-#        type: SUPPORTS
-#        end: false
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
-#
-#    - path: tck/lraresource/status
-#      method: GET
-#      lraMethod: STATUS
-#
-#    - path: tck/lraresource/leave
-#      method: PUT
-#      lraMethod: LEAVE
-#
-#    - path: tck/lraresource/complete
-#      method: PUT
-#      lraMethod: COMPLETE
-#
-#    - path: tck/lraresource/compensate
-#      method: PUT
-#      lraMethod: COMPENSATE
-#
-#    - path: tck/lraresource/after
-#      method: PUT
-#      lraMethod: AFTER
-#
-#    - path: tck/lraresource/forget
-#      method: DELETE
-#      lraMethod: FORGET
-#
-#    - path: tck/lraresource/acceptWork
-#      method: PUT
-#      lraSettings:
-#        type: REQUIRED
-#        end: false
-#
-#    - path: tck/lraresource/supports
-#      method: PUT
-#      lraSettings:
-#        type: SUPPORTS
-#        end: false
-#
-#    - path: tck/lraresource/startViaApi
-#      method: PUT
-#      lraSettings:
-#        type: NOT_SUPPORTED
-#
-#    - path: tck/lraresource/work
-#      method: PUT
-#      lraSettings:
-#        type: REQUIRED
-#        end: false
-#
-#    - path: tck/lraresource/mandatory
-#      method: PUT
-#      lraSettings:
-#        type: MANDATORY
-#        end: false
-#
-#    - path: tck/lraresource/nestedActivity
-#      method: PUT
-#      lraSettings:
-#        type: NESTED
-#        end: true
-#
-#    - path: tck/lraresource/cancel
-#      method: PUT
-#      lraSettings:
-#        type: MANDATORY
-#        end: true
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
-#    - path: tck/lraresource/multiLevelNestedActivity
-#      method: PUT
-#      lraSettings:
-#        type: MANDATORY
-#        end: false
+    - path: tck/non-participating-tck-resource/never
+      method: PUT
+      lraSettings:
+        type: NEVER
+
+    - path: tck/non-participating-tck-resource/supports
+      method: PUT
+      lraSettings:
+        type: SUPPORTS
+        end: false
+
+    - path: tck/non-participating-tck-resource/start-nested-and-end
+      method: PUT
+      lraSettings:
+        type: NESTED
+        cancelOnFamily:
+          - SERVER_ERROR
+
+    - path: tck/non-participating-tck-resource/start-nested-and-dont-end
+      method: PUT
+      lraSettings:
+        type: NESTED
+        end: false
+        cancelOnFamily:
+          - SERVER_ERROR
+
+    - path: tck/non-participating-tck-resource/start-via-remote-invocation
+      method: PUT
+      lraSettings:
+        type: SUPPORTS
+        end: false
+        cancelOnFamily:
+          - SERVER_ERROR
+
+
+    - path: tck/lraresource/status
+      method: GET
+      lraMethod: STATUS
+
+    - path: tck/lraresource/leave
+      method: PUT
+      lraMethod: LEAVE
+
+    - path: tck/lraresource/complete
+      method: PUT
+      lraMethod: COMPLETE
+
+    - path: tck/lraresource/compensate
+      method: PUT
+      lraMethod: COMPENSATE
+
+    - path: tck/lraresource/after
+      method: PUT
+      lraMethod: AFTER
+
+    - path: tck/lraresource/forget
+      method: DELETE
+      lraMethod: FORGET
+
+    - path: tck/lraresource/acceptWork
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+        end: false
+
+    - path: tck/lraresource/supports
+      method: PUT
+      lraSettings:
+        type: SUPPORTS
+        end: false
+
+    - path: tck/lraresource/startViaApi
+      method: PUT
+      lraSettings:
+        type: NOT_SUPPORTED
+
+    - path: tck/lraresource/work
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+        end: false
+
+    - path: tck/lraresource/mandatory
+      method: PUT
+      lraSettings:
+        type: MANDATORY
+        end: false
+
+    - path: tck/lraresource/nestedActivity
+      method: PUT
+      lraSettings:
+        type: NESTED
+        end: true
+
+    - path: tck/lraresource/cancel
+      method: PUT
+      lraSettings:
+        type: MANDATORY
+        end: true
+        cancelOnFamily:
+          - SERVER_ERROR
+
+    - path: tck/lraresource/multiLevelNestedActivity
+      method: PUT
+      lraSettings:
+        type: MANDATORY
+        end: false
 
 
 #    - path: /complete

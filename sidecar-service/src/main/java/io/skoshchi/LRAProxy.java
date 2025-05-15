@@ -126,8 +126,7 @@ public class LRAProxy {
         }
 
         Method method = resourceInfo.getResourceMethod();
-        // TODO fix the headers
-        MultivaluedMap<String, String> headers = httpHeaders.getRequestHeaders();
+        MultivaluedMap<String, String> headers = new MultivaluedHashMap<>(httpHeaders.getRequestHeaders());
         MultivaluedMap<String, String> queryParameters = info.getQueryParameters();
         LRA.Type type = lraProxyRouteConfig.getSettings() != null ? lraProxyRouteConfig.getSettings().getType() : null;
 
@@ -276,7 +275,6 @@ public class LRAProxy {
                             if (type == NESTED) {
                                 headers.putSingle(LRA_HTTP_PARENT_CONTEXT_HEADER, incomingLRA.toASCIIString());
 
-
                                 // if there is an LRA present nest a new LRA under it
                                 suspendedLRA = incomingLRA;
 
@@ -343,16 +341,14 @@ public class LRAProxy {
                     terminateLRA = lraId;
                 }
 
-
-                Current.push(lraId);
-
                 if (newLRA != null) {
                     if (suspendedLRA != null) {
                         suspendedLRA = incomingLRA;
                     }
                 }
+                log.info("[lraId]: " + lraId);
+                Current.updateLRAContext(lraId, headers); // make the current LRA available to the called method
 
-                Current.push(lraId);
 
                 try {
                     narayanaLRAClient.setCurrentLRA(lraId); // make the current LRA available to the called method
@@ -396,12 +392,13 @@ public class LRAProxy {
 
                             compensatorLink = linkHeaderValue.toString();
                             StringBuilder previousParticipantData = new StringBuilder();
+                            log.info("[compensatorLink]: " + compensatorLink);
 
                             recoveryUrl = narayanaLRAClient.enlistCompensator(lraId, timeLimit, compensatorLink, previousParticipantData);
 
                             progress = updateProgress(progress, ProgressStep.Joined, null);
-//                            headers.putSingle(LRA_HTTP_RECOVERY_HEADER,
-//                                    Pattern.compile("^\"|\"$").matcher(recoveryUrl.toASCIIString()).replaceAll(""));
+                            headers.putSingle(LRA_HTTP_RECOVERY_HEADER,
+                                    Pattern.compile("^\"|\"$").matcher(recoveryUrl.toASCIIString()).replaceAll(""));
 
                         } catch (WebApplicationException e) {
                             String reason = e.getMessage();
@@ -438,12 +435,12 @@ public class LRAProxy {
                 Current.addActiveLRACache(lraId);
             }
         }
-            // ================= SEND THE REQUEST =================
 
-            response = sendRequest(httpMethod, path, headers);
-            // ================= RESPONSE FILTER =================
+        // ================= SEND THE REQUEST =================
+        response = sendRequest(httpMethod, path, headers);
 
-            boolean isCancel = isJaxRsCancel(response);
+        // ================= RESPONSE FILTER =================
+        boolean isCancel = isJaxRsCancel(response, cancelOnFamily, cancelOn);
 
         try {
             if (currentLRA != null && isCancel) {
@@ -506,6 +503,7 @@ public class LRAProxy {
                             isCancel ? ProgressStep.CancelFailed : ProgressStep.CloseFailed, e.getMessage());
                 }
             } else if (currentLRA != null && compensatorLink != null) {
+                log.info("[compensatorLink]: " + compensatorLink);
                 narayanaLRAClient.enlistCompensator(currentLRA, 0L, compensatorLink, new StringBuilder());
             }
 
@@ -538,14 +536,11 @@ public class LRAProxy {
             }
 
             lraId = Current.peek();
-
-//            if (lraId != null) {
-//                headers.add(LRA_HTTP_CONTEXT_HEADER, lraId.toASCIIString());
-//            } else {
-//                if(headers.containsKey(LRA_HTTP_CONTEXT_HEADER)) {
-//                    headers.remove(LRA_HTTP_CONTEXT_HEADER);
-//                }
-//            }
+            if (lraId != null) {
+                headers.putSingle(LRA_HTTP_CONTEXT_HEADER, lraId.toASCIIString());
+            } else {
+                headers.remove(LRA_HTTP_CONTEXT_HEADER);
+            }
 
             Current.popAll();
             Current.removeActiveLRACache(currentLRA);
@@ -554,10 +549,10 @@ public class LRAProxy {
         return response;
     }
 
-    private boolean isJaxRsCancel(Response response) {
+    private boolean isJaxRsCancel(Response response,
+                                  Response.Status.Family[] cancelOnFamily,
+                                  Response.Status[] cancelOn) {
         int status = response.getStatus();
-        Response.Status.Family[] cancelOnFamily = (Response.Status.Family[]) response.getMetadata().getFirst(CANCEL_ON_FAMILY_PROP);
-        Response.Status[] cancelOn = (Response.Status[]) response.getMetadata().getFirst(CANCEL_ON_PROP);
 
         if (cancelOnFamily != null) {
             if (Arrays.stream(cancelOnFamily).anyMatch(f -> Response.Status.Family.familyOf(status) == f)) {
@@ -662,18 +657,19 @@ public class LRAProxy {
 
         try {
             String targetUrl = config.getProxy().getUrl() + path;
-            MultivaluedMap<String, Object> objectHeaders = new MultivaluedHashMap<>();
 
-            for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
-                for (String value : entry.getValue()) {
-                    objectHeaders.add(entry.getKey(), value);
-                }
-            }
+
 
             Builder builder = ClientBuilder.newClient()
                     .target(targetUrl)
-                    .request()
-                    .headers(objectHeaders);
+                    .request();
+
+            headers.forEach((s, strings) -> {
+                System.out.println("Header: " + s + " Value: " + strings.get(0));
+                builder.header(s, strings.get(0));
+            });
+//                    .headers(objectHeaders);
+
 
             switch (httpMethod.toUpperCase()) {
                 case "GET":
@@ -695,8 +691,6 @@ public class LRAProxy {
                     throw new IllegalArgumentException("Unsupported HTTP method: " + httpMethod);
             }
 
-            String body = response.readEntity(String.class);
-            log.info("[sendRequest] Response: " + body);
             return response;
 
         } catch (IllegalArgumentException e) {
@@ -710,10 +704,6 @@ public class LRAProxy {
                     .header("X-Error-Message", e.getMessage())
                     .entity("Proxy error occurred")
                     .build();
-        } finally {
-            if (response != null) {
-                response.close();
-            }
         }
     }
 
