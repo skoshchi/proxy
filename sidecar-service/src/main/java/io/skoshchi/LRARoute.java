@@ -3,33 +3,24 @@ package io.skoshchi;
 import io.skoshchi.yaml.LRASettings;
 import io.skoshchi.yaml.MethodType;
 
-public class MapByLRAPath {
-    private String serviceName;
-    private String method;
+// record
+public class LRARoute {
+    private String httpMethod;
     private LRASettings settings;
     private MethodType methodType;
 
-    public MapByLRAPath(String serviceName, String method, LRASettings settings, MethodType methodType) {
-        this.serviceName = serviceName;
-        this.method = method;
+    public LRARoute(String httpMethod, LRASettings settings, MethodType methodType) {
+        this.httpMethod = httpMethod;
         this.settings = settings;
         this.methodType = methodType;
     }
 
-    public String getServiceName() {
-        return serviceName;
+    public String getHttpMethod() {
+        return httpMethod;
     }
 
-    public void setServiceName(String serviceName) {
-        this.serviceName = serviceName;
-    }
-
-    public String getMethod() {
-        return method;
-    }
-
-    public void setMethod(String method) {
-        this.method = method;
+    public void setHttpMethod(String httpMethod) {
+        this.httpMethod = httpMethod;
     }
 
     public LRASettings getSettings() {
