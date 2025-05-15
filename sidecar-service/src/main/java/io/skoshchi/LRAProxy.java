@@ -15,6 +15,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.client.ClientBuilder;
 import jakarta.ws.rs.client.Entity;
+import jakarta.ws.rs.client.WebTarget;
 import jakarta.ws.rs.container.ResourceInfo;
 import jakarta.ws.rs.core.*;
 import jakarta.ws.rs.core.Context;
@@ -437,7 +438,7 @@ public class LRAProxy {
         }
 
         // ================= SEND THE REQUEST =================
-        response = sendRequest(httpMethod, path, headers);
+        response = sendRequest(httpMethod, path, headers, queryParameters);
 
         // ================= RESPONSE FILTER =================
         boolean isCancel = isJaxRsCancel(response, cancelOnFamily, cancelOn);
@@ -652,23 +653,27 @@ public class LRAProxy {
 
     private Response sendRequest(String httpMethod,
                                  String path,
-                                 MultivaluedMap<String, String> headers) {
+                                 MultivaluedMap<String, String> headers,
+                                 MultivaluedMap<String, String> queryParameters) {
         Response response = null;
 
         try {
             String targetUrl = config.getProxy().getUrl() + path;
+            WebTarget target = ClientBuilder.newClient()
+                    .target(targetUrl);
 
 
+            for (Map.Entry<String, List<String>> entry : queryParameters.entrySet()) {
+                target = target.queryParam(entry.getKey(), entry.getValue().get(0));
+            }
 
-            Builder builder = ClientBuilder.newClient()
-                    .target(targetUrl)
+            Builder builder = target
                     .request();
 
             headers.forEach((s, strings) -> {
                 System.out.println("Header: " + s + " Value: " + strings.get(0));
                 builder.header(s, strings.get(0));
             });
-//                    .headers(objectHeaders);
 
 
             switch (httpMethod.toUpperCase()) {
