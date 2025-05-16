@@ -740,9 +740,9 @@ public class LRAProxy {
             boolean hasSettings = control.getLraSettings() != null;
             boolean hasMethodType = control.getLraMethod() != null;
 
-            if (hasSettings && hasMethodType) {
-                throw new RuntimeException(prefix + "Both 'lraSettings' and 'lraMethod' cannot be present at the same time");
-            }
+//            if (hasSettings && hasMethodType) {
+//                throw new RuntimeException(prefix + "Both 'lraSettings' and 'lraMethod' cannot be present at the same time");
+//            }
 
             if (!hasSettings && !hasMethodType) {
                 throw new RuntimeException(prefix + "One of 'lraSettings' or 'lraMethod' must be defined");

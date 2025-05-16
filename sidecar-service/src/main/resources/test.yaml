@@ -181,7 +181,7 @@ proxy:
       lraSettings:
         type: SUPPORTS
         end: false
-#      lraMethod: LEAVE
+      lraMethod: LEAVE
 
     - path: tck/participating-tck-resource/join-with-new-LRA
       method: PUT
