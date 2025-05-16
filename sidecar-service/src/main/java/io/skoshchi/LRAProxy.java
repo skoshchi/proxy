@@ -4,6 +4,7 @@ import io.narayana.lra.Current;
 import io.narayana.lra.client.LRAParticipantData;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
 import io.narayana.lra.logging.LRALogger;
+import io.quarkus.runtime.StartupEvent;
 import io.skoshchi.yaml.LRAProxyConfig;
 import io.skoshchi.yaml.LRAProxyRouteConfig;
 import io.skoshchi.yaml.LRASettings;
@@ -11,6 +12,7 @@ import io.skoshchi.yaml.MethodType;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.client.ClientBuilder;
@@ -64,8 +66,7 @@ public class LRAProxy {
     private LRAProxyConfig config;
     private Map<String, LRARoute> lraRouteMap;
 
-    @PostConstruct
-    public void init() {
+    public void init(@Observes StartupEvent ev) {
         config = loadYamlConfig(configPath);
         if (!isYamlOK(config)) {
             throw new IllegalStateException("YAML configuration is invalid: " + configPath);
@@ -335,7 +336,7 @@ public class LRAProxy {
                     // the method call needs to run without a transaction
                     Current.clearContext(headers);
 
-                    return Response.status(BAD_REQUEST).entity("New LRA was not created inside the coordinator").build();
+                    return sendRequest(httpMethod, path, headers, queryParameters);
                 }
 
                 if (!isLongRunning) {
@@ -546,7 +547,6 @@ public class LRAProxy {
             Current.popAll();
             Current.removeActiveLRACache(currentLRA);
         }
-        // TODO how to add the header to response?
         return response;
     }
 

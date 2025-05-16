@@ -62,7 +62,8 @@ proxy:
 
     - path: tck/lraresource/leave
       method: PUT
-      lraMethod: LEAVE
+      lraSettings:
+        type: SUPPORTS
 
     - path: tck/lraresource/complete
       method: PUT
@@ -129,6 +130,98 @@ proxy:
         type: MANDATORY
         end: false
 
+    - path: tck/lraresource/startViaApi
+      method: PUT
+      lraSettings:
+        type: NOT_SUPPORTED
+
+    - path: tck/lraresource/timeLimit
+      method: GET
+      lraSettings:
+        type: REQUIRED
+        timeLimit: 500
+        timeUnit: MILLIS
+
+    - path: tck/lraresource/timeLimit2
+      method: GET
+      lraSettings:
+        type: REQUIRED
+        timeLimit: 500
+        timeUnit: MILLIS
+
+    - path: tck/participating-tck-resource/join-with-existing-lra
+      method: PUT
+      lraSettings:
+        type: MANDATORY
+        end: false
+        cancelOnFamily:
+          - SERVER_ERROR
+
+    - path: tck/participating-tck-resource/join-with-existing-lra2
+      method: PUT
+      lraSettings:
+        type: MANDATORY
+        end: false
+
+    - path: tck/participating-tck-resource/compensate
+      method: PUT
+      lraMethod: COMPENSATE
+
+    - path: tck/participating-tck-resource/complete
+      method: PUT
+      lraMethod: COMPLETE
+
+    - path: tck/participating-tck-resource/accept
+      method: PUT
+      lraSettings:
+        type: REQUIRES_NEW
+
+    - path: tck/participating-tck-resource/leave
+      method: PUT
+      lraSettings:
+        type: SUPPORTS
+        end: false
+#      lraMethod: LEAVE
+
+    - path: tck/participating-tck-resource/join-with-new-LRA
+      method: PUT
+      lraSettings:
+        type: REQUIRES_NEW
+        end: false
+
+    - path: tck/nolraresource/work
+      method: PUT
+      lraSettings:
+        type: SUPPORTS
+        end: false
+
+    - path: tck/after-lra-listener/work
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+        end: false
+
+    - path: tck/after-lra-listener/after
+      method: PUT
+      lraMethod: AFTER
+
+    - path: tck/after-lra-participant/work
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+        end: false
+
+    - path: tck/after-lra-participant/after
+      method: PUT
+      lraMethod: AFTER
+
+    - path: tck/after-lra-participant/compensate
+      method: PUT
+      lraMethod: COMPENSATE
+
+    - path: tck/after-lra-participant/complete
+      method: PUT
+      lraMethod: COMPLETE
 
 #    - path: /complete
 #      method: PUT
