@@ -9,7 +9,6 @@ import io.skoshchi.yaml.LRAProxyConfig;
 import io.skoshchi.yaml.LRAProxyRouteConfig;
 import io.skoshchi.yaml.LRASettings;
 import io.skoshchi.yaml.MethodType;
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.event.Observes;
@@ -57,7 +56,12 @@ public class LRAProxy {
     @Context
     protected ResourceInfo resourceInfo;
 
+    @ConfigProperty(name = "quarkus.lra.coordinator-url")
+    String coordinatorUrl;
+
     @Inject
+    LRAParticipantData data;
+
     NarayanaLRAClient narayanaLRAClient;
 
     @ConfigProperty(name = "proxy.config-path")
@@ -72,6 +76,7 @@ public class LRAProxy {
             throw new IllegalStateException("YAML configuration is invalid: " + configPath);
         }
         lraRouteMap = getLraRouteMap();
+        narayanaLRAClient = new NarayanaLRAClient(URI.create(coordinatorUrl));
     }
 
 
@@ -132,7 +137,7 @@ public class LRAProxy {
         MultivaluedMap<String, String> queryParameters = info.getQueryParameters();
         LRA.Type type = lraProxyRouteConfig.getSettings() != null ? lraProxyRouteConfig.getSettings().getType() : null;
 
-        URI lraId = Current.peek();
+        URI lraId = null;
         URI newLRA = null;
         Long timeout = lraProxyRouteConfig.getSettings() != null ? lraProxyRouteConfig.getSettings().getTimeLimit() : 0L;
         ChronoUnit timeUnit = lraProxyRouteConfig.getSettings() != null ? lraProxyRouteConfig.getSettings().getTimeUnit() : ChronoUnit.SECONDS;
@@ -143,15 +148,18 @@ public class LRAProxy {
         boolean isLongRunning = !(lraProxyRouteConfig.getSettings() != null && lraProxyRouteConfig.getSettings().isEnd());
         boolean requiresActiveLRA = false;
         ArrayList<Progress> progress = null;
+        Response.Status.Family[] cancelOnFamily = null;
+        Response.Status[] cancelOn = null;
 
-        Response.Status.Family[] cancelOnFamily = Optional.ofNullable(lraProxyRouteConfig.getSettings().getCancelOnFamily())
-                .map(list -> list.toArray(new Response.Status.Family[0]))
-                .orElse(new Response.Status.Family[0]);
+        if (lraProxyRouteConfig.getSettings() != null) {
+            cancelOnFamily = Optional.ofNullable(lraProxyRouteConfig.getSettings().getCancelOnFamily())
+                    .map(list -> list.toArray(new Response.Status.Family[0]))
+                    .orElse(new Response.Status.Family[0]);
 
-        Response.Status[] cancelOn = Optional.ofNullable(lraProxyRouteConfig.getSettings().getCancelOn())
-                .map(list -> list.toArray(new Response.Status[0]))
-                .orElse(new Response.Status[0]);
-
+            cancelOn = Optional.ofNullable(lraProxyRouteConfig.getSettings().getCancelOn())
+                    .map(list -> list.toArray(new Response.Status[0]))
+                    .orElse(new Response.Status[0]);
+        }
 
         boolean endAnnotation =  lraRouteMap.containsKey(path) && lraRouteMap.get(path).getMethodType() != null;
 
@@ -168,44 +176,45 @@ public class LRAProxy {
             } catch (URISyntaxException e) {
                 String msg = String.format("header %s contains an invalid URL %s",
                         LRA_HTTP_CONTEXT_HEADER, Current.getLast(headers.get(LRA_HTTP_CONTEXT_HEADER)));
+
                 return Response.status(Response.Status.PRECONDITION_FAILED.getStatusCode())
                         .entity(msg)
                         .build();
             }
 
-            if (lraRouteMap.get(path).getMethodType().equals(MethodType.LEAVE)) {
+            if (lraRouteMap.containsKey(path) && lraRouteMap.get(path).getMethodType() != null) {
+                if (lraRouteMap.get(path).getMethodType().equals(MethodType.LEAVE)) {
 
-                Map<String, String> terminateURIs = buildTerminationUrisFromCompensators(timeout);
-                String compensatorId = terminateURIs.get("Link");
+                    Map<String, String> terminateURIs = buildTerminationUrisFromCompensators(timeout);
+                    String compensatorId = terminateURIs.get("Link");
 
-                if (compensatorId == null) {
-                    return Response.status(Response.Status.BAD_REQUEST)
-                            .entity("Missing complete or compensate annotations")
-                            .build();
+                    if (compensatorId == null) {
+                        return Response.status(Response.Status.BAD_REQUEST)
+                                .entity("Missing complete or compensate annotations")
+                                .build();
+                    }
+
+                    progress = new ArrayList<>();
+
+                    try {
+                        narayanaLRAClient.leaveLRA(incomingLRA, compensatorId);
+                        progress.add(new Progress(ProgressStep.Left, null)); // leave succeeded
+                    } catch (WebApplicationException e) {
+                        progress.add(new Progress(ProgressStep.LeaveFailed, e.getMessage())); // leave may have failed
+                        return Response.status(e.getResponse().getStatus())
+                                .entity(e.getMessage())
+                                .build();
+                    } catch (ProcessingException e) { // a remote coordinator was unavailable
+                        progress.add(new Progress(ProgressStep.LeaveFailed, e.getMessage())); // leave may have failed
+                        return Response.status(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode())
+                                .entity(e.getMessage())
+                                .build();
+                    }
+
+                    // let the participant know which lra he left by leaving the header intact
                 }
-
-                progress = new ArrayList<>();
-
-                try {
-                    narayanaLRAClient.leaveLRA(incomingLRA, compensatorId);
-                    progress.add(new Progress(ProgressStep.Left, null)); // leave succeeded
-                } catch (WebApplicationException e) {
-                    progress.add(new Progress(ProgressStep.LeaveFailed, e.getMessage())); // leave may have failed
-                    return Response.status(e.getResponse().getStatus())
-                            .entity(e.getMessage())
-                            .build();
-                } catch (ProcessingException e) { // a remote coordinator was unavailable
-                    progress.add(new Progress(ProgressStep.LeaveFailed, e.getMessage())); // leave may have failed
-                    return Response.status(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode())
-                            .entity(e.getMessage())
-                            .build();
-                }
-
-                // let the participant know which lra he left by leaving the header intact
             }
         }
-
-        boolean isNotTransactional = false;
 
         if (type == null) {
             if (!endAnnotation) {
@@ -218,126 +227,125 @@ public class LRAProxy {
                 currentLRA = incomingLRA;
                 Current.addActiveLRACache(incomingLRA);
             }
-
-            isNotTransactional = true;
         }
+
 
         String compensatorLink = null;
 
-        if(!isNotTransactional) {
 
-            if (!headers.containsKey(LRA_HTTP_CONTEXT_HEADER)) {
-                if (lraId != null) {
-                    incomingLRA = lraId;
+        if (!headers.containsKey(LRA_HTTP_CONTEXT_HEADER)) {
+            lraId = Current.peek();
+            if (lraId != null) {
+                incomingLRA = lraId;
+            }
+        }
+
+        if (!endAnnotation) {
+            try {
+                if (Current.getFirstParent(incomingLRA) != null) {
+                    headers.putSingle(LRA_HTTP_PARENT_CONTEXT_HEADER, Current.getFirstParent(incomingLRA));
                 }
+            } catch (UnsupportedEncodingException e) {
+                return Response.status(Response.Status.PRECONDITION_FAILED.getStatusCode())
+                        .entity(String.format("incoming LRA %s contains an invalid parent: %s", incomingLRA, e.getMessage()))
+                        .build();
             }
 
-            if (!endAnnotation) {
-                try {
-                    if (Current.getFirstParent(incomingLRA) != null) {
-                        headers.putSingle(LRA_HTTP_PARENT_CONTEXT_HEADER, Current.getFirstParent(incomingLRA));
+            switch (type) {
+                case MANDATORY:
+                    if (isTxInvalid(incomingLRA, true)) {
+                        return Response.status(Response.Status.PRECONDITION_FAILED.getStatusCode())
+                                .entity(type.name() + " but no tx")
+                                .build();
                     }
-                } catch (UnsupportedEncodingException e) {
-                    return Response.status(Response.Status.PRECONDITION_FAILED.getStatusCode())
-                            .entity(String.format("incoming LRA %s contains an invalid parent: %s", incomingLRA, e.getMessage()))
-                            .build();
-                }
 
-                switch (type) {
-                    case MANDATORY:
-                        if (isTxInvalid(incomingLRA, true)) {
-                            return Response.status(Response.Status.PRECONDITION_FAILED.getStatusCode())
-                                    .entity(type.name() + " but no tx")
-                                    .build();
-                        }
+                    lraId = incomingLRA;
+                    requiresActiveLRA = true;
 
-                        lraId = incomingLRA;
-                        requiresActiveLRA = true;
+                    break;
+                case NEVER: // a txn must not be present
+                    if (isTxInvalid(incomingLRA, false)) {
+                        return Response.status(Response.Status.PRECONDITION_FAILED.getStatusCode())
+                                .entity(type.name() + " but no tx")
+                                .build();
+                    }
 
-                        break;
-                    case NEVER: // a txn must not be present
-                        if (isTxInvalid(incomingLRA, false)) {
-                            return Response.status(Response.Status.PRECONDITION_FAILED.getStatusCode())
-                                    .entity(type.name() + " but no tx")
-                                    .build();
-                        }
+                    lraId = null; // must not run with any context
 
-                        lraId = null; // must not run with any context
+                    break;
+                case NOT_SUPPORTED:
+                    suspendedLRA = incomingLRA;
+                    lraId = null; // must not run with any context
 
-                        break;
-                    case NOT_SUPPORTED:
-                        suspendedLRA = incomingLRA;
-                        lraId = null; // must not run with any context
+                    break;
+                case NESTED:
+                    // FALLTHROUGH
+                case REQUIRED:
+                    if (incomingLRA != null) {
+                        if (type == NESTED) {
+                            headers.putSingle(LRA_HTTP_PARENT_CONTEXT_HEADER, incomingLRA.toASCIIString());
 
-                        break;
-                    case NESTED:
-                        // FALLTHROUGH
-                    case REQUIRED:
-                        if (incomingLRA != null) {
-                            if (type == NESTED) {
-                                headers.putSingle(LRA_HTTP_PARENT_CONTEXT_HEADER, incomingLRA.toASCIIString());
+                            // if there is an LRA present nest a new LRA under it
+                            suspendedLRA = incomingLRA;
 
-                                // if there is an LRA present nest a new LRA under it
-                                suspendedLRA = incomingLRA;
-
-                                if (progress == null) {
-                                    progress = new ArrayList<>();
-                                }
-
-                                newLRA = lraId = narayanaLRAClient.startLRA(incomingLRA, method.getDeclaringClass().getName() + "#" + method.getName(), timeout, timeUnit);
-
-                                if (newLRA == null) {
-                                    // startLRA will have called abortWith on the request context
-                                    // the failure plus any previous actions (the leave request) will be reported via the response filter
-                                    return Response.status(BAD_REQUEST).entity("New LRA was not created inside the coordinator").build();
-                                }
-                            } else {
-                                lraId = incomingLRA;
-                                // incomingLRA will be resumed
-                                requiresActiveLRA = true;
+                            if (progress == null) {
+                                progress = new ArrayList<>();
                             }
 
-                        } else {
-                            progress = new ArrayList<>();
-                            newLRA = lraId = narayanaLRAClient.startLRA(null, method.getDeclaringClass().getName() + "#" + method.getName(), timeout, timeUnit);
-
+                            newLRA = lraId = narayanaLRAClient.startLRA(incomingLRA, method.getDeclaringClass().getName() + "#" + method.getName(), timeout, timeUnit);
 
                             if (newLRA == null) {
                                 // startLRA will have called abortWith on the request context
-                                // the failure and any previous actions (the leave request) will be reported via the response filter
+                                // the failure plus any previous actions (the leave request) will be reported via the response filter
                                 return Response.status(BAD_REQUEST).entity("New LRA was not created inside the coordinator").build();
                             }
+                        } else {
+                            lraId = incomingLRA;
+                            // incomingLRA will be resumed
+                            requiresActiveLRA = true;
                         }
 
-                        break;
-                    case REQUIRES_NEW:
-                        suspendedLRA = incomingLRA;
-
-                        if (progress == null) {
-                            progress = new ArrayList<>();
-                        }
+                    } else {
+                        progress = new ArrayList<>();
                         newLRA = lraId = narayanaLRAClient.startLRA(null, method.getDeclaringClass().getName() + "#" + method.getName(), timeout, timeUnit);
+
+
                         if (newLRA == null) {
                             // startLRA will have called abortWith on the request context
                             // the failure and any previous actions (the leave request) will be reported via the response filter
                             return Response.status(BAD_REQUEST).entity("New LRA was not created inside the coordinator").build();
                         }
+                    }
 
-                        break;
-                    case SUPPORTS:
-                        lraId = incomingLRA;
+                    break;
+                case REQUIRES_NEW:
+                    suspendedLRA = incomingLRA;
 
-                        break;
-                    default:
-                        lraId = incomingLRA;
-                }
+                    if (progress == null) {
+                        progress = new ArrayList<>();
+                    }
+                    newLRA = lraId = narayanaLRAClient.startLRA(null, method.getDeclaringClass().getName() + "#" + method.getName(), timeout, timeUnit);
+                    if (newLRA == null) {
+                        // startLRA will have called abortWith on the request context
+                        // the failure and any previous actions (the leave request) will be reported via the response filter
+                        return Response.status(BAD_REQUEST).entity("New LRA was not created inside the coordinator").build();
+                    }
 
-                if (lraId == null) {
-                    // the method call needs to run without a transaction
-                    Current.clearContext(headers);
+                    break;
+                case SUPPORTS:
+                    lraId = incomingLRA;
 
-                    return sendRequest(httpMethod, path, headers, queryParameters);
-                }
+                    break;
+                default:
+                    lraId = incomingLRA;
+            }
+
+            if (lraId == null) {
+                // the method call needs to run without a transaction
+                Current.clearContext(headers);
+
+                response = sendRequest(httpMethod, path, headers, queryParameters);
+            } else {
 
                 if (!isLongRunning) {
                     terminateLRA = lraId;
@@ -435,14 +443,16 @@ public class LRAProxy {
                 }
                 currentLRA = lraId;
                 Current.addActiveLRACache(lraId);
+
+
+            // ================= SEND THE REQUEST =================
+            response = sendRequest(httpMethod, path, headers, queryParameters);
             }
+
         }
-
-        // ================= SEND THE REQUEST =================
-        response = sendRequest(httpMethod, path, headers, queryParameters);
-
         // ================= RESPONSE FILTER =================
         boolean isCancel = isJaxRsCancel(response, cancelOnFamily, cancelOn);
+        String userData = getUserDefinedData();
 
         try {
             if (currentLRA != null && isCancel) {
@@ -504,9 +514,9 @@ public class LRAProxy {
                     progress = updateProgress(progress,
                             isCancel ? ProgressStep.CancelFailed : ProgressStep.CloseFailed, e.getMessage());
                 }
-            } else if (currentLRA != null && compensatorLink != null) {
+            } else if (currentLRA != null && compensatorLink != null && userData != null) {
                 log.info("[compensatorLink]: " + compensatorLink);
-                narayanaLRAClient.enlistCompensator(currentLRA, 0L, compensatorLink, new StringBuilder());
+                narayanaLRAClient.enlistCompensator(currentLRA, 0L, compensatorLink, new StringBuilder(userData));
             }
 
             if (response.getStatus() == Response.Status.OK.getStatusCode()
@@ -608,6 +618,16 @@ public class LRAProxy {
         }
     }
 
+    private String getUserDefinedData() {
+        try {
+            return data != null ? data.getData() : null;
+        } catch (ContextNotActiveException e) {
+            LRALogger.i18nLogger.warn_missingContexts("CDI bean of type LRAParticipantData is not available", e);
+        }
+
+        return null;
+    }
+
     private enum ProgressStep {
         Left ("leave succeeded"),
         LeaveFailed("leave failed"),
@@ -659,20 +679,19 @@ public class LRAProxy {
 
         try {
             String targetUrl = config.getProxy().getUrl() + path;
-            WebTarget target = ClientBuilder.newClient()
-                    .target(targetUrl);
-
+            WebTarget target = ClientBuilder.newClient().target(targetUrl);
 
             for (Map.Entry<String, List<String>> entry : queryParameters.entrySet()) {
                 target = target.queryParam(entry.getKey(), entry.getValue().get(0));
             }
 
-            Builder builder = target
-                    .request();
+            Builder builder = target.request();
 
             headers.forEach((s, strings) -> {
                 System.out.println("Header: " + s + " Value: " + strings.get(0));
-                builder.header(s, strings.get(0));
+                if (!s.equals("Content-Length")) {
+                    builder.header(s, strings.get(0));
+                }
             });
 
 
@@ -681,10 +700,10 @@ public class LRAProxy {
                     response = builder.get();
                     break;
                 case "POST":
-                    response = builder.post(null);
+                    response = builder.post(Entity.text(""));
                     break;
                 case "PUT":
-                    response = builder.put(null);
+                    response = builder.put(Entity.text(""));
                     break;
                 case "DELETE":
                     response = builder.delete();
@@ -695,6 +714,7 @@ public class LRAProxy {
                 default:
                     throw new IllegalArgumentException("Unsupported HTTP method: " + httpMethod);
             }
+            System.out.println("!!!! LRA_HTTP_CONTEXT_HEADER after call !!!! = " + response.getHeaderString(LRA_HTTP_CONTEXT_HEADER));
 
             return response;
 
@@ -744,9 +764,9 @@ public class LRAProxy {
 //                throw new RuntimeException(prefix + "Both 'lraSettings' and 'lraMethod' cannot be present at the same time");
 //            }
 
-            if (!hasSettings && !hasMethodType) {
-                throw new RuntimeException(prefix + "One of 'lraSettings' or 'lraMethod' must be defined");
-            }
+//            if (!hasSettings && !hasMethodType) {
+//                throw new RuntimeException(prefix + "One of 'lraSettings' or 'lraMethod' must be defined");
+//            }
 
             if (hasMethodType &&
                     !List.of(   MethodType.COMPENSATE,

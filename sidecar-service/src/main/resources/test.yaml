@@ -181,7 +181,7 @@ proxy:
       lraSettings:
         type: SUPPORTS
         end: false
-      lraMethod: LEAVE
+#      lraMethod: LEAVE
 
     - path: tck/participating-tck-resource/join-with-new-LRA
       method: PUT
@@ -193,7 +193,6 @@ proxy:
       method: PUT
       lraSettings:
         type: SUPPORTS
-        end: false
 
     - path: tck/after-lra-listener/work
       method: PUT
@@ -222,6 +221,12 @@ proxy:
     - path: tck/after-lra-participant/complete
       method: PUT
       lraMethod: COMPLETE
+
+    - path: tck/lraresource-cancelon/cancelOnFamilyDefault4xx
+      method: GET
+      lraSettings:
+        type: REQUIRED
+
 
 #    - path: /complete
 #      method: PUT
