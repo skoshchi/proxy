@@ -148,6 +148,7 @@ proxy:
         timeLimit: 500
         timeUnit: MILLIS
 
+#    participating-tck-resource
     - path: tck/participating-tck-resource/join-with-existing-lra
       method: PUT
       lraSettings:
@@ -215,6 +216,54 @@ proxy:
     - path: tck/after-lra-participant/complete
       method: PUT
       lraMethod: COMPLETE
+
+    # LraCancelOnResource
+
+    - path: tck/lraresource-cancelon/cancelOnFamilyDefault4xx
+      method: GET
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/lraresource-cancelon/cancelOnFamilyDefault5xx
+      method: GET
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/lraresource-cancelon/cancelOnFamily3xx
+      method: GET
+      lraSettings:
+        type: REQUIRES_NEW
+        cancelOnFamily:
+          - REDIRECTION
+
+    - path: tck/lraresource-cancelon/cancelOn301
+      method: GET
+      lraSettings:
+        type: REQUIRES_NEW
+        cancelOn:
+          - MOVED_PERMANENTLY
+
+    - path: tck/lraresource-cancelon/notCancelOnFamily5xx
+      method: GET
+      lraSettings:
+        type: REQUIRES_NEW
+        cancelOnFamily:
+          - CLIENT_ERROR
+
+    - path: tck/lraresource-cancelon/cancelFromRemoteCall
+      method: GET
+      lraSettings:
+        type: REQUIRES_NEW
+
+    - path: tck/lraresource-cancelon/complete
+      method: PUT
+      lraMethod: COMPLETE
+
+    - path: tck/lraresource-cancelon/compensate
+      method: PUT
+      lraMethod: COMPENSATE
+
+
     # LRATypeTckResource
 
     - path: tck/lra-type-tck-resource/required
