@@ -1,7 +1,6 @@
 package io.skoshchi;
 
 import io.narayana.lra.Current;
-import io.narayana.lra.client.LRAParticipantData;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
 import io.narayana.lra.logging.LRALogger;
 import io.quarkus.runtime.StartupEvent;
@@ -9,11 +8,8 @@ import io.skoshchi.yaml.LRAProxyConfig;
 import io.skoshchi.yaml.LRAProxyRouteConfig;
 import io.skoshchi.yaml.LRASettings;
 import io.skoshchi.yaml.MethodType;
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.client.ClientBuilder;
 import jakarta.ws.rs.client.Entity;
@@ -57,7 +53,9 @@ public class LRAProxy {
     @Context
     protected ResourceInfo resourceInfo;
 
-    @Inject
+    @ConfigProperty(name = "quarkus.lra.coordinator-url")
+    String coordinatorUrl;
+
     NarayanaLRAClient narayanaLRAClient;
 
     @ConfigProperty(name = "proxy.config-path")
@@ -72,6 +70,8 @@ public class LRAProxy {
             throw new IllegalStateException("YAML configuration is invalid: " + configPath);
         }
         lraRouteMap = getLraRouteMap();
+
+        narayanaLRAClient = new NarayanaLRAClient(URI.create(coordinatorUrl));
     }
 
 
@@ -80,7 +80,7 @@ public class LRAProxy {
     public Response proxyGet(@Context HttpHeaders httpHeaders,
                              @Context UriInfo info,
                              @PathParam("path") String path) {
-        return handleRequest(httpHeaders, info,"GET", path);
+        return handleRequest(httpHeaders, info, "GET", path);
     }
 
     @POST
@@ -88,7 +88,7 @@ public class LRAProxy {
     public Response proxyPost(@Context HttpHeaders httpHeaders,
                               @Context UriInfo info,
                               @PathParam("path") String path) {
-        return handleRequest(httpHeaders, info,"POST", path);
+        return handleRequest(httpHeaders, info, "POST", path);
     }
 
     @PUT
@@ -96,7 +96,10 @@ public class LRAProxy {
     public Response proxyPut(@Context HttpHeaders httpHeaders,
                              @Context UriInfo info,
                              @PathParam("path") String path) {
-        return handleRequest(httpHeaders, info,"PUT", path);
+        System.out.println("--------------- PUT -----------------");
+        httpHeaders.getRequestHeaders().forEach((s, strings) ->
+                System.out.println(s + " : " + strings));
+        return handleRequest(httpHeaders, info, "PUT", path);
     }
 
     @DELETE
@@ -104,7 +107,7 @@ public class LRAProxy {
     public Response proxyDelete(@Context HttpHeaders httpHeaders,
                                 @Context UriInfo info,
                                 @PathParam("path") String path) {
-        return handleRequest(httpHeaders, info,"DELETE", path);
+        return handleRequest(httpHeaders, info, "DELETE", path);
     }
 
     @PATCH
@@ -112,7 +115,7 @@ public class LRAProxy {
     public Response proxyPatch(@Context HttpHeaders httpHeaders,
                                @Context UriInfo info,
                                @PathParam("path") String path) {
-        return handleRequest(httpHeaders, info,"PATCH", path);
+        return handleRequest(httpHeaders, info, "PATCH", path);
     }
 
     public Response handleRequest(HttpHeaders httpHeaders, UriInfo info, String httpMethod, String path) {
@@ -122,14 +125,16 @@ public class LRAProxy {
                 " Incoming path: " + path);
 
         LRARoute lraProxyRouteConfig = lraRouteMap.get(path);
-
-        if (lraProxyRouteConfig == null) {
-            throw new IllegalStateException("No path found in yaml: " + path);
-        }
-
         Method method = resourceInfo.getResourceMethod();
         MultivaluedMap<String, String> headers = new MultivaluedHashMap<>(httpHeaders.getRequestHeaders());
         MultivaluedMap<String, String> queryParameters = info.getQueryParameters();
+
+
+        if (lraProxyRouteConfig == null) {
+            // no-op
+            return sendRequest(httpMethod, path, headers, queryParameters);
+        }
+
         LRA.Type type = lraProxyRouteConfig.getSettings() != null ? lraProxyRouteConfig.getSettings().getType() : null;
 
         URI lraId = Current.peek();
@@ -143,24 +148,30 @@ public class LRAProxy {
         boolean isLongRunning = !(lraProxyRouteConfig.getSettings() != null && lraProxyRouteConfig.getSettings().isEnd());
         boolean requiresActiveLRA = false;
         ArrayList<Progress> progress = null;
+        Response.Status.Family[] cancelOnFamily = null;
+        Response.Status[] cancelOn = null;
 
-        Response.Status.Family[] cancelOnFamily = Optional.ofNullable(lraProxyRouteConfig.getSettings().getCancelOnFamily())
-                .map(list -> list.toArray(new Response.Status.Family[0]))
-                .orElse(new Response.Status.Family[0]);
+        if (lraProxyRouteConfig.getSettings() != null) {
 
-        Response.Status[] cancelOn = Optional.ofNullable(lraProxyRouteConfig.getSettings().getCancelOn())
-                .map(list -> list.toArray(new Response.Status[0]))
-                .orElse(new Response.Status[0]);
+            cancelOnFamily = Optional.ofNullable(lraProxyRouteConfig.getSettings().getCancelOnFamily())
+                    .map(list -> list.toArray(new Response.Status.Family[0]))
+                    .orElse(new Response.Status.Family[0]);
+
+            cancelOn = Optional.ofNullable(lraProxyRouteConfig.getSettings().getCancelOn())
+                    .map(list -> list.toArray(new Response.Status[0]))
+                    .orElse(new Response.Status[0]);
+        }
 
 
-        boolean endAnnotation =  lraRouteMap.containsKey(path) && lraRouteMap.get(path).getMethodType() != null;
+        MethodType methodType = lraRouteMap.get(path).getMethodType();
+        boolean endAnnotation = lraRouteMap.containsKey(path) && methodType != null;
 
         URI suspendLRA = null;
         URI currentLRA = null;
         URI parentLRA = null;
         URI terminateLRA = null;
 
-        Response response = Response.ok().build();
+        Response response;
 
         if (headers.containsKey(LRA_HTTP_CONTEXT_HEADER)) {
             try {
@@ -173,14 +184,21 @@ public class LRAProxy {
                         .build();
             }
 
-            if (lraRouteMap.get(path).getMethodType().equals(MethodType.LEAVE)) {
+            if (methodType != null && methodType.equals(MethodType.LEAVE)) {
 
-                Map<String, String> terminateURIs = buildTerminationUrisFromCompensators(timeout);
+                /*
+                 // leave the LRA
+                Map<String, String> terminateURIs = NarayanaLRAClient.getTerminationUris(
+                        resourceInfo.getResourceClass(), createUriPrefix(containerRequestContext), timeout);
+                String compensatorId = terminateURIs.get("Link");
+                 */
+
+                Map<String, String> terminateURIs = getTerminationUris(getBasePath(path), config.getProxy().getUrl(), timeout);
                 String compensatorId = terminateURIs.get("Link");
 
                 if (compensatorId == null) {
                     return Response.status(Response.Status.BAD_REQUEST)
-                            .entity("Missing complete or compensate annotations")
+                            .entity("Missing complete or compensate definitions for: " + path)
                             .build();
                 }
 
@@ -224,7 +242,7 @@ public class LRAProxy {
 
         String compensatorLink = null;
 
-        if(!isNotTransactional) {
+        if (!isNotTransactional) {
 
             if (!headers.containsKey(LRA_HTTP_CONTEXT_HEADER)) {
                 if (lraId != null) {
@@ -289,7 +307,7 @@ public class LRAProxy {
                                 if (newLRA == null) {
                                     // startLRA will have called abortWith on the request context
                                     // the failure plus any previous actions (the leave request) will be reported via the response filter
-                                    return Response.status(BAD_REQUEST).entity("New LRA was not created inside the coordinator").build();
+                                    return sendRequest(httpMethod, path, headers, queryParameters);
                                 }
                             } else {
                                 lraId = incomingLRA;
@@ -363,34 +381,34 @@ public class LRAProxy {
                 }
 
                 if (!endAnnotation) { // don't enlist for methods marked with Compensate, Complete or Leave
-                    Map<String, String> terminateURIs = buildTerminationUrisFromCompensators(timeout);
+                    Map<String, String> terminateURIs = getTerminationUris(getBasePath(path), config.getProxy().getUrl(), timeout);
 
                     String timeLimitStr = terminateURIs.get(TIMELIMIT_PARAM_NAME);
                     long timeLimit = timeLimitStr == null ? 0L : Long.parseLong(timeLimitStr);
 
                     if (terminateURIs.containsKey("Link")) {
                         try {
-                            String basePath = getTimedPath(path);
-
-                            Map<MethodType, URI> urisByType = new EnumMap<>(MethodType.class);
-
-                            for (Map.Entry<String, LRARoute> entry : lraRouteMap.entrySet()) {
-                                String candidatePath = entry.getKey();
-                                LRARoute route = entry.getValue();
-
-                                if (route.getMethodType() != null && candidatePath.contains(basePath)) {
-                                    URI uri = new URI(config.getProxy().getUrl() + (candidatePath.startsWith("/") ? candidatePath : "/" + candidatePath));
-                                    urisByType.put(route.getMethodType(), uri);
-                                }
-                            }
+//                            String basePath = getBasePath(path);
+//
+//                            Map<MethodType, URI> urisByType = new EnumMap<>(MethodType.class);
+//
+//                            for (Map.Entry<String, LRARoute> entry : lraRouteMap.entrySet()) {
+//                                String candidatePath = entry.getKey();
+//                                LRARoute route = entry.getValue();
+//
+//                                if (route.getMethodType() != null && candidatePath.contains(basePath)) {
+//                                    URI uri = new URI(config.getProxy().getUrl() + (candidatePath.startsWith("/") ? candidatePath : "/" + candidatePath));
+//                                    urisByType.put(route.getMethodType(), uri);
+//                                }
+//                            }
 
                             StringBuilder linkHeaderValue = new StringBuilder();
-                            makeLink(linkHeaderValue, COMPENSATE, urisByType.get(MethodType.COMPENSATE));
-                            makeLink(linkHeaderValue, COMPLETE, urisByType.get(MethodType.COMPLETE));
-                            makeLink(linkHeaderValue, FORGET, urisByType.get(MethodType.FORGET));
-                            makeLink(linkHeaderValue, LEAVE, urisByType.get(MethodType.LEAVE));
-                            makeLink(linkHeaderValue, AFTER, urisByType.get(MethodType.AFTER));
-                            makeLink(linkHeaderValue, STATUS, urisByType.get(MethodType.STATUS));
+                            makeLink(linkHeaderValue, COMPENSATE, toURI(terminateURIs.get(COMPENSATE)));
+                            makeLink(linkHeaderValue, COMPLETE, toURI(terminateURIs.get(COMPLETE)));
+                            makeLink(linkHeaderValue, FORGET, toURI(terminateURIs.get(FORGET)));
+                            makeLink(linkHeaderValue, LEAVE, toURI(terminateURIs.get(LEAVE)));
+                            makeLink(linkHeaderValue, AFTER, toURI(terminateURIs.get(AFTER)));
+                            makeLink(linkHeaderValue, STATUS, toURI(terminateURIs.get(STATUS)));
 
                             compensatorLink = linkHeaderValue.toString();
                             StringBuilder previousParticipantData = new StringBuilder();
@@ -506,7 +524,7 @@ public class LRAProxy {
                 }
             } else if (currentLRA != null && compensatorLink != null) {
                 log.info("[compensatorLink]: " + compensatorLink);
-                narayanaLRAClient.enlistCompensator(currentLRA, 0L, compensatorLink, new StringBuilder());
+//                narayanaLRAClient.enlistCompensator(currentLRA, 0L, compensatorLink, new StringBuilder());
             }
 
             if (response.getStatus() == Response.Status.OK.getStatusCode()
@@ -526,7 +544,7 @@ public class LRAProxy {
              * different warning code for each scenario:
              */
             if (progress != null) {
-                String failureMessage =  processLRAOperationFailures(progress);
+                String failureMessage = processLRAOperationFailures(progress);
 
                 if (failureMessage != null) {
                     LRALogger.logger.warn(failureMessage); // any other failure(s) will already have been logged
@@ -539,9 +557,9 @@ public class LRAProxy {
 
             lraId = Current.peek();
             if (lraId != null) {
-                headers.putSingle(LRA_HTTP_CONTEXT_HEADER, lraId.toASCIIString());
+                response.getHeaders().putSingle(LRA_HTTP_CONTEXT_HEADER, lraId.toASCIIString());
             } else {
-                headers.remove(LRA_HTTP_CONTEXT_HEADER);
+                response.getHeaders().remove(LRA_HTTP_CONTEXT_HEADER);
             }
 
             Current.popAll();
@@ -609,7 +627,7 @@ public class LRAProxy {
     }
 
     private enum ProgressStep {
-        Left ("leave succeeded"),
+        Left("leave succeeded"),
         LeaveFailed("leave failed"),
         Started("start succeeded"),
         StartFailed("start failed"),
@@ -642,7 +660,7 @@ public class LRAProxy {
         }
 
         String uri = value.toASCIIString();
-        Link link =  Link.fromUri(uri).title(key + " URI").rel(key).type(MediaType.TEXT_PLAIN).build();
+        Link link = Link.fromUri(uri).title(key + " URI").rel(key).type(MediaType.TEXT_PLAIN).build();
 
         if (b.length() != 0) {
             b.append(',');
@@ -672,7 +690,9 @@ public class LRAProxy {
 
             headers.forEach((s, strings) -> {
                 System.out.println("Header: " + s + " Value: " + strings.get(0));
-                builder.header(s, strings.get(0));
+                if (!s.equals("Content-Length")) {
+                    builder.header(s, strings.get(0));
+                }
             });
 
 
@@ -749,12 +769,12 @@ public class LRAProxy {
             }
 
             if (hasMethodType &&
-                    !List.of(   MethodType.COMPENSATE,
-                                MethodType.COMPLETE,
-                                MethodType.FORGET,
-                                MethodType.STATUS,
-                                MethodType.LEAVE,
-                                MethodType.AFTER)
+                    !List.of(MethodType.COMPENSATE,
+                                    MethodType.COMPLETE,
+                                    MethodType.FORGET,
+                                    MethodType.STATUS,
+                                    MethodType.LEAVE,
+                                    MethodType.AFTER)
                             .contains(control.getLraMethod())) {
                 throw new RuntimeException(prefix + "Invalid 'lraMethod': " + control.getLraMethod());
             }
@@ -794,26 +814,31 @@ public class LRAProxy {
         return uri == null ? null : new URI(uri);
     }
 
-    public Map<String, String> buildTerminationUrisFromCompensators(
-            long timeout
-    ) {
+    public Map<String, String> getTerminationUris(String pathPrefix, String baseUri, Long timeout) {
         Map<String, String> paths = new HashMap<>();
-        String timeoutValue = Long.toString(timeout);
-        paths.put("TimeLimit", timeoutValue);
+        String timeoutValue = timeout != null ? Long.toString(timeout) : "0";
 
-        lraRouteMap.forEach((key, value) ->{
-            String methodTypeString = "";
-            if (value.getMethodType() != null) {
-                switch (value.getMethodType()) {
-                    case COMPENSATE -> methodTypeString = COMPENSATE;
-                    case COMPLETE -> methodTypeString = COMPLETE;
-                    case STATUS -> methodTypeString = STATUS;
-                    case FORGET -> methodTypeString = FORGET;
-                    case LEAVE -> methodTypeString = LEAVE;
-                    case AFTER -> methodTypeString = AFTER;
-                    default -> throw new IllegalStateException("Unsupported methodType: " + value.getMethodType());
+        lraRouteMap.forEach((key, value) -> {
+            if (key.startsWith(pathPrefix)) {
+                String methodTypeString = "";
+                if (value.getMethodType() != null) {
+                    switch (value.getMethodType()) {
+                        case COMPENSATE -> {
+                            methodTypeString = COMPENSATE;
+                            paths.put(TIMELIMIT_PARAM_NAME, timeoutValue);
+                        }
+                        case COMPLETE -> {
+                            methodTypeString = COMPLETE;
+                            paths.put(TIMELIMIT_PARAM_NAME, timeoutValue);
+                        }
+                        case STATUS -> methodTypeString = STATUS;
+                        case FORGET -> methodTypeString = FORGET;
+                        case LEAVE -> methodTypeString = LEAVE;
+                        case AFTER -> methodTypeString = AFTER;
+                        default -> throw new IllegalStateException("Unsupported methodType: " + value.getMethodType());
+                    }
+                    paths.put(methodTypeString, baseUri + key);
                 }
-                paths.put(methodTypeString, key);
             }
         });
 
@@ -868,7 +893,7 @@ public class LRAProxy {
         return null;
     }
 
-    private String getTimedPath(String requestPath) {
+    private String getBasePath(String requestPath) {
         String[] parts = requestPath.split("/");
 
         if (parts.length <= 2) {

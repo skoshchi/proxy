@@ -62,8 +62,7 @@ proxy:
 
     - path: tck/lraresource/leave
       method: PUT
-      lraSettings:
-        type: SUPPORTS
+      lraMethod: LEAVE
 
     - path: tck/lraresource/complete
       method: PUT
@@ -189,12 +188,6 @@ proxy:
         type: REQUIRES_NEW
         end: false
 
-    - path: tck/nolraresource/work
-      method: PUT
-      lraSettings:
-        type: SUPPORTS
-        end: false
-
     - path: tck/after-lra-listener/work
       method: PUT
       lraSettings:
@@ -222,6 +215,75 @@ proxy:
     - path: tck/after-lra-participant/complete
       method: PUT
       lraMethod: COMPLETE
+    # LRATypeTckResource
+
+    - path: tck/lra-type-tck-resource/required
+      method: GET
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/lra-type-tck-resource/requires-new
+      method: GET
+      lraSettings:
+        type: REQUIRES_NEW
+
+    - path: tck/lra-type-tck-resource/mandatory
+      method: GET
+      lraSettings:
+        type: MANDATORY
+
+    - path: tck/lra-type-tck-resource/supports
+      method: GET
+      lraSettings:
+        type: SUPPORTS
+
+    - path: tck/lra-type-tck-resource/not-supported
+      method: GET
+      lraSettings:
+        type: NOT_SUPPORTED
+
+    - path: tck/lra-type-tck-resource/never
+      method: GET
+      lraSettings:
+        type: NEVER
+
+    - path: tck/lra-type-tck-resource/end-required
+      method: GET
+      lraSettings:
+        type: REQUIRED
+        end: false
+
+    - path: tck/lra-type-tck-resource/end-requires-new
+      method: GET
+      lraSettings:
+        type: REQUIRES_NEW
+        end: false
+
+    - path: tck/lra-type-tck-resource/end-mandatory
+      method: GET
+      lraSettings:
+        type: MANDATORY
+        end: false
+
+    - path: tck/lra-type-tck-resource/end-supports
+      method: GET
+      lraSettings:
+        type: SUPPORTS
+        end: false
+
+    - path: tck/lra-type-tck-resource/end-not-supported
+      method: GET
+      lraSettings:
+        type: NOT_SUPPORTED
+        end: false
+
+    - path: tck/lra-type-tck-resource/end-never
+      method: GET
+      lraSettings:
+        type: NEVER
+        end: false
+
+
 
 #    - path: /complete
 #      method: PUT
