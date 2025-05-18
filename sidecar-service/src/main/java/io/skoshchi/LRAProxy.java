@@ -97,6 +97,7 @@ public class LRAProxy {
                              @Context UriInfo info,
                              @PathParam("path") String path) {
         System.out.println("--------------- PUT -----------------");
+        System.out.println("path: " + path);
         httpHeaders.getRequestHeaders().forEach((s, strings) ->
                 System.out.println(s + " : " + strings));
         return handleRequest(httpHeaders, info, "PUT", path);
@@ -819,7 +820,7 @@ public class LRAProxy {
         String timeoutValue = timeout != null ? Long.toString(timeout) : "0";
 
         lraRouteMap.forEach((key, value) -> {
-            if (key.startsWith(pathPrefix)) {
+            if (key.startsWith(pathPrefix + "/") || key.equals(pathPrefix)) {
                 String methodTypeString = "";
                 if (value.getMethodType() != null) {
                     switch (value.getMethodType()) {

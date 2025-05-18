@@ -439,6 +439,164 @@ proxy:
         type: NEVER
         end: false
 
+  # LRATypeTckInterface
+    - path: tck/lra-type-tck-interface-resource/required
+      method: GET
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/lra-type-tck-interface-resource/requires-new
+      method: GET
+      lraSettings:
+        type: REQUIRES_NEW
+
+    - path: tck/lra-type-tck-interface-resource/mandatory
+      method: GET
+      lraSettings:
+        type: MANDATORY
+
+    - path: tck/lra-type-tck-interface-resource/supports
+      method: GET
+      lraSettings:
+        type: SUPPORTS
+
+    - path: tck/lra-type-tck-interface-resource/not-supported
+      method: GET
+      lraSettings:
+        type: NOT_SUPPORTED
+
+    - path: tck/lra-type-tck-interface-resource/never
+      method: GET
+      lraSettings:
+        type: NEVER
+
+    - path: tck/lra-type-tck-interface-resource/end-required
+      method: GET
+      lraSettings:
+        type: REQUIRED
+        end: false
+
+    - path: tck/lra-type-tck-interface-resource/end-requires-new
+      method: GET
+      lraSettings:
+        type: REQUIRES_NEW
+        end: false
+
+    - path: tck/lra-type-tck-interface-resource/end-supports
+      method: GET
+      lraSettings:
+        type: SUPPORTS
+        end: false
+
+    - path: tck/lra-type-tck-interface-resource/end-not-supported
+      method: GET
+      lraSettings:
+        type: NOT_SUPPORTED
+        end: false
+
+    - path: tck/lra-type-tck-interface-resource/end-never
+      method: GET
+      lraSettings:
+        type: NEVER
+        end: false
+
+      # LRATypeTckSuperclass
+    - path: tck/lra-type-tck-superclass-resource/required
+      method: GET
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/lra-type-tck-superclass-resource/requires-new
+      method: GET
+      lraSettings:
+        type: REQUIRES_NEW
+
+    - path: tck/lra-type-tck-superclass-resource/mandatory
+      method: GET
+      lraSettings:
+        type: MANDATORY
+
+    - path: tck/lra-type-tck-superclass-resource/supports
+      method: GET
+      lraSettings:
+        type: SUPPORTS
+
+    - path: tck/lra-type-tck-superclass-resource/not-supported
+      method: GET
+      lraSettings:
+        type: NOT_SUPPORTED
+
+    - path: tck/lra-type-tck-superclass-resource/never
+      method: GET
+      lraSettings:
+        type: NEVER
+
+    - path: tck/lra-type-tck-superclass-resource/end-required
+      method: GET
+      lraSettings:
+        type: REQUIRED
+        end: false
+
+    - path: tck/lra-type-tck-superclass-resource/end-requires-new
+      method: GET
+      lraSettings:
+        type: REQUIRES_NEW
+        end: false
+
+    - path: tck/lra-type-tck-superclass-resource/end-supports
+      method: GET
+      lraSettings:
+        type: SUPPORTS
+        end: false
+
+    - path: tck/lra-type-tck-superclass-resource/end-not-supported
+      method: GET
+      lraSettings:
+        type: NOT_SUPPORTED
+        end: false
+
+    - path: tck/lra-type-tck-superclass-resource/end-never
+      method: GET
+      lraSettings:
+        type: NEVER
+        end: false
+
+    # RecoveryResource
+    - path: tck/recovery-resource/required
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+        end: false
+
+    - path: tck/recovery-resource/required-timeout
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+        end: false
+        timeLimit: 500
+        timeUnit: MILLIS
+
+    - path: tck/recovery-resource/compensate
+      method: PUT
+      lraMethod: COMPENSATE
+
+    - path: tck/recovery-resource/after
+      method: PUT
+      lraMethod: AFTER
+
+  # LRAUnknownResource
+    - path: tck/lraUnknownController/work
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/lraUnknownController/complete
+      method: PUT
+      lraMethod: AFTER
+
+    - path: tck/lraUnknownController/compensate
+      method: PUT
+      lraMethod: COMPENSATE
 
 
 #    - path: /complete
