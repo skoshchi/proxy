@@ -80,6 +80,8 @@ public class LRAProxy {
     public Response proxyGet(@Context HttpHeaders httpHeaders,
                              @Context UriInfo info,
                              @PathParam("path") String path) {
+        System.out.println("--------------- GET -----------------");
+        System.out.println("path: " + path);
         return handleRequest(httpHeaders, info, "GET", path);
     }
 
@@ -88,6 +90,8 @@ public class LRAProxy {
     public Response proxyPost(@Context HttpHeaders httpHeaders,
                               @Context UriInfo info,
                               @PathParam("path") String path) {
+        System.out.println("--------------- POST -----------------");
+        System.out.println("path: " + path);
         return handleRequest(httpHeaders, info, "POST", path);
     }
 
@@ -108,6 +112,8 @@ public class LRAProxy {
     public Response proxyDelete(@Context HttpHeaders httpHeaders,
                                 @Context UriInfo info,
                                 @PathParam("path") String path) {
+        System.out.println("--------------- DELETE -----------------");
+        System.out.println("path: " + path);
         return handleRequest(httpHeaders, info, "DELETE", path);
     }
 
@@ -116,6 +122,8 @@ public class LRAProxy {
     public Response proxyPatch(@Context HttpHeaders httpHeaders,
                                @Context UriInfo info,
                                @PathParam("path") String path) {
+        System.out.println("--------------- PATCH -----------------");
+        System.out.println("path: " + path);
         return handleRequest(httpHeaders, info, "PATCH", path);
     }
 
