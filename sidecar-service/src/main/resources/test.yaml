@@ -336,6 +336,41 @@ proxy:
       lraSettings:
         type: REQUIRED
 
+    # ValidLRAParticipant
+
+    - path: tck/valid-nonjaxrs/nonjaxrs-enlist-complete
+      method: GET
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/valid-nonjaxrs/nonjaxrs-enlist-compensate
+      method: GET
+      lraSettings:
+        type: REQUIRED
+        cancelOn:
+          - INTERNAL_SERVER_ERROR
+
+    - path: tck/valid-cs-participant1/enlist-complete
+      method: GET
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/valid-cs-participant1/enlist-complete
+      method: GET
+      lraSettings:
+        type: REQUIRED
+        cancelOn:
+          - INTERNAL_SERVER_ERROR
+
+
+    # LongBusinessMethodParticipant
+
+    - path: tck/long-business-participant/business-method
+      method: GET
+      lraSettings:
+        type: MANDATORY
+        end: false
+
     # LRATypeTckResource
 
     - path: tck/lra-type-tck-resource/required
