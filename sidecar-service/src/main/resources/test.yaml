@@ -263,6 +263,78 @@ proxy:
       method: PUT
       lraMethod: COMPENSATE
 
+    # ContextTckResource
+    - path: tck/context-tck-resource/new-lra
+      method: PUT
+      lraSettings:
+        type: REQUIRES_NEW
+        end: false
+
+    - path: tck/context-tck-resource/required-lra
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/context-tck-resource/requires-new-lra
+      method: PUT
+      lraSettings:
+        type: REQUIRES_NEW
+
+    - path: tck/context-tck-resource/nested-lra
+      method: PUT
+      lraSettings:
+        type: NESTED
+        end: false
+
+    - path: tck/context-tck-resource/nested-lra-with-close
+      method: PUT
+      lraSettings:
+        type: NESTED
+
+    - path: tck/context-tck-resource/context-check-lra
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/context-tck-resource/completion-stage-lra
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+        end: true
+        cancelOnFamily:
+          - SERVER_ERROR
+        cancelOn:
+          - NOT_FOUND
+
+    - path: tck/context-tck-resource/completion-stage-exceptionally-lra
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/context-tck-resource/leave
+      method: PUT
+      lraMethod: LEAVE
+
+    - path: tck/context-tck-resource/compensate
+      method: PUT
+      lraMethod: COMPENSATE
+
+    - path: tck/context-tck-resource/complete
+      method: PUT
+      lraMethod: COMPLETE
+
+    - path: tck/context-tck-resource/status
+      method: GET
+      lraMethod: STATUS
+
+    - path: tck/context-tck-resource/forget
+      method: DELETE
+      lraMethod: FORGET
+
+    - path: tck/context-tck-resource/async-response-lra
+      method: PUT
+      lraSettings:
+        type: REQUIRED
 
     # LRATypeTckResource
 
