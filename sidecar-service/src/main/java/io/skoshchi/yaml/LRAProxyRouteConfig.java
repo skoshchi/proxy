@@ -1,8 +1,11 @@
 package io.skoshchi.yaml;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class LRAProxyRouteConfig {
     private String path;
-    private String method;
+
+    private String httpMethod;
     private LRASettings lraSettings;
     private MethodType lraMethod;
 
@@ -17,12 +20,12 @@ public class LRAProxyRouteConfig {
         this.path = path;
     }
 
-    public String getMethod() {
-        return method;
+    public String getHttpMethod() {
+        return httpMethod;
     }
 
-    public void setMethod(String method) {
-        this.method = method;
+    public void setHttpMethod(String httpMethod) {
+        this.httpMethod = httpMethod;
     }
 
     public LRASettings getLraSettings() {
@@ -45,7 +48,7 @@ public class LRAProxyRouteConfig {
     public String toString() {
         return "LRAProxy{" +
                 "path='" + path + '\'' +
-                ", method='" + method + '\'' +
+                ", httpMethod='" + httpMethod + '\'' +
                 ", lraSettings=" + lraSettings +
                 ", lraMethod=" + lraMethod +
                 '}';

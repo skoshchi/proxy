@@ -22,12 +22,13 @@ import jakarta.ws.rs.client.Invocation.Builder;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.lra.annotation.*;
 import org.eclipse.microprofile.lra.annotation.ws.rs.LRA;
+import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.Constructor;
+import org.yaml.snakeyaml.introspector.Property;
+import org.yaml.snakeyaml.introspector.PropertyUtils;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -35,6 +36,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static io.narayana.lra.LRAConstants.*;
 import static jakarta.ws.rs.core.Response.Status.BAD_REQUEST;
@@ -742,11 +745,30 @@ public class LRAProxy {
     }
 
     private LRAProxyConfig loadYamlConfig(String filePath) {
-        Yaml yaml = new Yaml();
-        try (InputStream inputStream = new FileInputStream(new File(filePath))) {
-            return yaml.loadAs(inputStream, LRAProxyConfig.class);
-        } catch (Exception e) {
+        LoaderOptions loaderOptions = new LoaderOptions();
+        Constructor ctor = new Constructor(LRAProxyConfig.class, loaderOptions);
+
+        HyphenToCamelPropertyUtils propUtils = new HyphenToCamelPropertyUtils();
+        propUtils.setSkipMissingProperties(true);   // чтобы игнорировать незнакомые поля
+        ctor.setPropertyUtils(propUtils);
+
+        Yaml yaml = new Yaml(ctor);
+
+        try (InputStream in = new FileInputStream(filePath)) {
+            return yaml.loadAs(in, LRAProxyConfig.class);
+        } catch (IOException e) {
             throw new RuntimeException("Failed to load YAML: " + filePath, e);
+        }
+    }
+    private static class HyphenToCamelPropertyUtils extends PropertyUtils {
+        @Override
+        public Property getProperty(Class<?> type, String name) {
+            // «http-method» → «httpMethod», «lra-method» → «lraMethod»
+            String camel = Stream.of(name.split("-"))
+                    .map(s -> s.isEmpty() ? "" : Character.toUpperCase(s.charAt(0)) + s.substring(1))
+                    .collect(Collectors.joining());
+            camel = Character.toLowerCase(camel.charAt(0)) + camel.substring(1);
+            return super.getProperty(type, camel);
         }
     }
 
@@ -761,8 +783,8 @@ public class LRAProxy {
                 throw new RuntimeException(prefix + "'path' is missing or empty");
             }
 
-            if (control.getMethod() == null ||
-                    !List.of("GET", "POST", "PUT", "DELETE", "PATCH").contains(control.getMethod().toUpperCase())) {
+            if (control.getHttpMethod() == null ||
+                    !List.of("GET", "POST", "PUT", "DELETE", "PATCH").contains(control.getHttpMethod().toUpperCase())) {
                 throw new RuntimeException(prefix + "'httpMethod' must be a valid HTTP method");
             }
 
@@ -807,7 +829,7 @@ public class LRAProxy {
                 if (rawPath != null) {
                     String normalizedPath = rawPath.startsWith("/") ? rawPath : "/" + rawPath;
 
-                    String method = control.getMethod();
+                    String method = control.getHttpMethod();
                     LRASettings settings = control.getLraSettings();
                     MethodType methodType = control.getLraMethod();
 
