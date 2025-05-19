@@ -45,9 +45,6 @@ import static org.eclipse.microprofile.lra.annotation.ws.rs.LRA.Type.NESTED;
 @Path("")
 @ApplicationScoped
 public class LRAProxy {
-    private static final String CANCEL_ON_FAMILY_PROP = "CancelOnFamily";
-    private static final String CANCEL_ON_PROP = "CancelOn";
-
     private static final Logger log = Logger.getLogger(LRAProxy.class.getName());
 
     @Context
@@ -74,14 +71,13 @@ public class LRAProxy {
         narayanaLRAClient = new NarayanaLRAClient(URI.create(coordinatorUrl));
     }
 
-
     @GET
     @Path("{path:.*}")
     public Response proxyGet(@Context HttpHeaders httpHeaders,
                              @Context UriInfo info,
                              @PathParam("path") String path) {
-        System.out.println("--------------- GET -----------------");
-        System.out.println("path: " + path);
+        log.info("--------------- GET -----------------");
+        log.info("path: " + path);
         return handleRequest(httpHeaders, info, "GET", path);
     }
 
@@ -90,8 +86,8 @@ public class LRAProxy {
     public Response proxyPost(@Context HttpHeaders httpHeaders,
                               @Context UriInfo info,
                               @PathParam("path") String path) {
-        System.out.println("--------------- POST -----------------");
-        System.out.println("path: " + path);
+        log.info("--------------- POST -----------------");
+        log.info("path: " + path);
         return handleRequest(httpHeaders, info, "POST", path);
     }
 
@@ -100,10 +96,8 @@ public class LRAProxy {
     public Response proxyPut(@Context HttpHeaders httpHeaders,
                              @Context UriInfo info,
                              @PathParam("path") String path) {
-        System.out.println("--------------- PUT -----------------");
-        System.out.println("path: " + path);
-        httpHeaders.getRequestHeaders().forEach((s, strings) ->
-                System.out.println(s + " : " + strings));
+        log.info("--------------- PUT -----------------");
+        log.info("path: " + path);
         return handleRequest(httpHeaders, info, "PUT", path);
     }
 
@@ -112,8 +106,8 @@ public class LRAProxy {
     public Response proxyDelete(@Context HttpHeaders httpHeaders,
                                 @Context UriInfo info,
                                 @PathParam("path") String path) {
-        System.out.println("--------------- DELETE -----------------");
-        System.out.println("path: " + path);
+        log.info("--------------- DELETE -----------------");
+        log.info("path: " + path);
         return handleRequest(httpHeaders, info, "DELETE", path);
     }
 
@@ -122,8 +116,8 @@ public class LRAProxy {
     public Response proxyPatch(@Context HttpHeaders httpHeaders,
                                @Context UriInfo info,
                                @PathParam("path") String path) {
-        System.out.println("--------------- PATCH -----------------");
-        System.out.println("path: " + path);
+        log.info("--------------- PATCH -----------------");
+        log.info("path: " + path);
         return handleRequest(httpHeaders, info, "PATCH", path);
     }
 
@@ -195,13 +189,6 @@ public class LRAProxy {
 
             if (methodType != null && methodType.equals(MethodType.LEAVE)) {
 
-                /*
-                 // leave the LRA
-                Map<String, String> terminateURIs = NarayanaLRAClient.getTerminationUris(
-                        resourceInfo.getResourceClass(), createUriPrefix(containerRequestContext), timeout);
-                String compensatorId = terminateURIs.get("Link");
-                 */
-
                 Map<String, String> terminateURIs = getTerminationUris(getBasePath(path), config.getUrl(), timeout);
                 String compensatorId = terminateURIs.get("Link");
 
@@ -227,8 +214,6 @@ public class LRAProxy {
                             .entity(e.getMessage())
                             .build();
                 }
-
-                // let the participant know which lra he left by leaving the header intact
             }
         }
 
@@ -397,19 +382,6 @@ public class LRAProxy {
 
                     if (terminateURIs.containsKey("Link")) {
                         try {
-//                            String basePath = getBasePath(path);
-//
-//                            Map<MethodType, URI> urisByType = new EnumMap<>(MethodType.class);
-//
-//                            for (Map.Entry<String, LRARoute> entry : lraRouteMap.entrySet()) {
-//                                String candidatePath = entry.getKey();
-//                                LRARoute route = entry.getValue();
-//
-//                                if (route.getMethodType() != null && candidatePath.contains(basePath)) {
-//                                    URI uri = new URI(config.getProxy().getUrl() + (candidatePath.startsWith("/") ? candidatePath : "/" + candidatePath));
-//                                    urisByType.put(route.getMethodType(), uri);
-//                                }
-//                            }
 
                             StringBuilder linkHeaderValue = new StringBuilder();
                             makeLink(linkHeaderValue, COMPENSATE, toURI(terminateURIs.get(COMPENSATE)));
@@ -468,7 +440,6 @@ public class LRAProxy {
         // ================= SEND THE REQUEST =================
         response = sendRequest(httpMethod, path, headers, queryParameters);
 
-        // ================= RESPONSE FILTER =================
         boolean isCancel = isJaxRsCancel(response, cancelOnFamily, cancelOn);
 
         try {
@@ -533,7 +504,6 @@ public class LRAProxy {
                 }
             } else if (currentLRA != null && compensatorLink != null) {
                 log.info("[compensatorLink]: " + compensatorLink);
-//                narayanaLRAClient.enlistCompensator(currentLRA, 0L, compensatorLink, new StringBuilder());
             }
 
             if (response.getStatus() == Response.Status.OK.getStatusCode()
@@ -698,7 +668,6 @@ public class LRAProxy {
                     .request();
 
             headers.forEach((s, strings) -> {
-                System.out.println("Header: " + s + " Value: " + strings.get(0));
                 if (!s.equals("Content-Length")) {
                     builder.header(s, strings.get(0));
                 }
@@ -791,13 +760,8 @@ public class LRAProxy {
                         + Arrays.toString(HttpMethodType.values()));
             }
 
-
             boolean hasSettings = control.getLraSettings() != null;
             boolean hasMethodType = control.getLraMethod() != null;
-
-//            if (hasSettings && hasMethodType) {
-//                throw new RuntimeException(prefix + "Both 'lraSettings' and 'lraMethod' cannot be present at the same time");
-//            }
 
             if (!hasSettings && !hasMethodType) {
                 throw new RuntimeException(prefix + "One of 'lraSettings' or 'lraMethod' must be defined");

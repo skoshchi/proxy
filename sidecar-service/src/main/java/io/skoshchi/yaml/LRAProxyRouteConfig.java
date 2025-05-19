@@ -1,7 +1,5 @@
 package io.skoshchi.yaml;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 public class LRAProxyRouteConfig {
     private String path;
 
