@@ -1,5 +1,5 @@
 url: http://127.0.0.1:8180
-coordinator-url: http://127.0.0.1:8080/lra-coordinator/lra-coordinator
+lra-coordinator-url: http://127.0.0.1:8080/lra-coordinator/lra-coordinator
 lra:
   # NonParticipatingTckResource
 

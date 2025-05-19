@@ -53,7 +53,7 @@ public class LRAProxy {
 
     NarayanaLRAClient narayanaLRAClient;
 
-    @ConfigProperty(name = "proxy.config-path")
+    @ConfigProperty(name = "lra.proxy.config-path")
     String configPath;
 
     private LRAProxyConfig config;
@@ -66,7 +66,7 @@ public class LRAProxy {
         }
         lraRouteMap = getLraRouteMap();
 
-        narayanaLRAClient = new NarayanaLRAClient(URI.create(config.getCoordinatorUrl()));
+        narayanaLRAClient = new NarayanaLRAClient(URI.create(config.getLraCoordinatorUrl()));
     }
 
     @GET
@@ -74,9 +74,7 @@ public class LRAProxy {
     public Response proxyGet(@Context HttpHeaders httpHeaders,
                              @Context UriInfo info,
                              @PathParam("path") String path) {
-        log.info("--------------- GET -----------------");
-        log.info("path: " + path);
-        return handleRequest(httpHeaders, info, HttpMethodType.GET, path);
+        return handleRequest(httpHeaders, info, HttpMethod.GET, path);
     }
 
     @POST
@@ -84,9 +82,7 @@ public class LRAProxy {
     public Response proxyPost(@Context HttpHeaders httpHeaders,
                               @Context UriInfo info,
                               @PathParam("path") String path) {
-        log.info("--------------- POST -----------------");
-        log.info("path: " + path);
-        return handleRequest(httpHeaders, info, HttpMethodType.POST, path);
+        return handleRequest(httpHeaders, info, HttpMethod.POST, path);
     }
 
     @PUT
@@ -94,9 +90,7 @@ public class LRAProxy {
     public Response proxyPut(@Context HttpHeaders httpHeaders,
                              @Context UriInfo info,
                              @PathParam("path") String path) {
-        log.info("--------------- PUT -----------------");
-        log.info("path: " + path);
-        return handleRequest(httpHeaders, info, HttpMethodType.PUT, path);
+        return handleRequest(httpHeaders, info, HttpMethod.PUT, path);
     }
 
     @DELETE
@@ -104,9 +98,7 @@ public class LRAProxy {
     public Response proxyDelete(@Context HttpHeaders httpHeaders,
                                 @Context UriInfo info,
                                 @PathParam("path") String path) {
-        log.info("--------------- DELETE -----------------");
-        log.info("path: " + path);
-        return handleRequest(httpHeaders, info, HttpMethodType.DELETE, path);
+        return handleRequest(httpHeaders, info, HttpMethod.DELETE, path);
     }
 
     @PATCH
@@ -114,19 +106,13 @@ public class LRAProxy {
     public Response proxyPatch(@Context HttpHeaders httpHeaders,
                                @Context UriInfo info,
                                @PathParam("path") String path) {
-        log.info("--------------- PATCH -----------------");
-        log.info("path: " + path);
-        return handleRequest(httpHeaders, info, HttpMethodType.PATCH, path);
+        return handleRequest(httpHeaders, info, HttpMethod.PATCH, path);
     }
 
-    public Response handleRequest(HttpHeaders httpHeaders, UriInfo info, HttpMethodType httpMethod, String path) {
+    public Response handleRequest(HttpHeaders httpHeaders, UriInfo info, String httpMethod, String path) {
         path = path.startsWith("/") ? path : "/" + path;
 
-        log.info("[handleRequest] " + httpMethod +
-                " Incoming path: " + path);
-
         LRARoute lraProxyRouteConfig = lraRouteMap.get(path);
-        Method method = resourceInfo.getResourceMethod();
         MultivaluedMap<String, String> headers = new MultivaluedHashMap<>(httpHeaders.getRequestHeaders());
         MultivaluedMap<String, String> queryParameters = info.getQueryParameters();
 
@@ -136,7 +122,7 @@ public class LRAProxy {
         }
 
         LRA.Type type = lraProxyRouteConfig.getSettings() != null ? lraProxyRouteConfig.getSettings().getType() : null;
-
+        String actionName = "LRAProxy handles request to " + httpMethod + " " + path;
         URI lraId = Current.peek();
         URI newLRA = null;
         Long timeout = lraProxyRouteConfig.getSettings() != null ? lraProxyRouteConfig.getSettings().getTimeLimit() : 0L;
@@ -163,8 +149,8 @@ public class LRAProxy {
         }
 
 
-        MethodType methodType = lraRouteMap.get(path).getMethodType();
-        boolean endAnnotation = lraRouteMap.containsKey(path) && methodType != null;
+        LRAMethodType LRAMethodType = lraRouteMap.get(path).getMethodType();
+        boolean endAnnotation = lraRouteMap.containsKey(path) && LRAMethodType != null;
 
         URI suspendLRA = null;
         URI currentLRA = null;
@@ -184,7 +170,7 @@ public class LRAProxy {
                         .build();
             }
 
-            if (methodType != null && methodType.equals(MethodType.LEAVE)) {
+            if (LRAMethodType != null && LRAMethodType.equals(LRAMethodType.LEAVE)) {
 
                 Map<String, String> terminateURIs = getTerminationUris(getBasePath(path), config.getUrl(), timeout);
                 String compensatorId = terminateURIs.get("Link");
@@ -293,7 +279,7 @@ public class LRAProxy {
                                     progress = new ArrayList<>();
                                 }
 
-                                newLRA = lraId = narayanaLRAClient.startLRA(incomingLRA, method.getDeclaringClass().getName() + "#" + method.getName(), timeout, timeUnit);
+                                newLRA = lraId = narayanaLRAClient.startLRA(incomingLRA, actionName, timeout, timeUnit);
 
                                 if (newLRA == null) {
                                     // startLRA will have called abortWith on the request context
@@ -308,7 +294,7 @@ public class LRAProxy {
 
                         } else {
                             progress = new ArrayList<>();
-                            newLRA = lraId = narayanaLRAClient.startLRA(null, method.getDeclaringClass().getName() + "#" + method.getName(), timeout, timeUnit);
+                            newLRA = lraId = narayanaLRAClient.startLRA(null, actionName, timeout, timeUnit);
 
 
                             if (newLRA == null) {
@@ -325,7 +311,7 @@ public class LRAProxy {
                         if (progress == null) {
                             progress = new ArrayList<>();
                         }
-                        newLRA = lraId = narayanaLRAClient.startLRA(null, method.getDeclaringClass().getName() + "#" + method.getName(), timeout, timeUnit);
+                        newLRA = lraId = narayanaLRAClient.startLRA(null, actionName, timeout, timeUnit);
                         if (newLRA == null) {
                             // startLRA will have called abortWith on the request context
                             // the failure and any previous actions (the leave request) will be reported via the response filter
@@ -454,9 +440,8 @@ public class LRAProxy {
                 } catch (WebApplicationException e) {
                     progress = updateProgress(progress, ProgressStep.CancelFailed, e.getMessage());
                 } catch (ProcessingException e) {
-                    method = resourceInfo.getResourceMethod();
                     LRALogger.i18nLogger.warn_lraFilterContainerRequest("ProcessingException: " + e.getMessage(),
-                            method.getDeclaringClass().getName() + "#" + method.getName(), currentLRA.toASCIIString());
+                            actionName, currentLRA.toASCIIString());
 
                     progress = updateProgress(progress, ProgressStep.CancelFailed, e.getMessage());
                     terminateLRA = null;
@@ -645,7 +630,7 @@ public class LRAProxy {
         b.append(link);
     }
 
-    private Response sendRequest(HttpMethodType httpMethod,
+    private Response sendRequest(String httpMethod,
                                  String path,
                                  MultivaluedMap<String, String> headers,
                                  MultivaluedMap<String, String> queryParameters) {
@@ -672,19 +657,19 @@ public class LRAProxy {
 
 
             switch (httpMethod) {
-                case GET:
+                case HttpMethod.GET:
                     response = builder.get();
                     break;
-                case POST:
+                case HttpMethod.POST:
                     response = builder.post(null);
                     break;
-                case PUT:
+                case HttpMethod.PUT:
                     response = builder.put(null);
                     break;
-                case DELETE:
+                case HttpMethod.DELETE:
                     response = builder.delete();
                     break;
-                case PATCH:
+                case HttpMethod.PATCH:
                     response = builder.method("PATCH", Entity.text(""));
                     break;
                 default:
@@ -751,10 +736,10 @@ public class LRAProxy {
             }
 
             try {
-                HttpMethodType method = control.getHttpMethod();
+                String method = control.getHttpMethod();
             } catch (IllegalArgumentException e) {
-                throw new RuntimeException(prefix + "'httpMethod' must be one of "
-                        + Arrays.toString(HttpMethodType.values()));
+                throw new RuntimeException(prefix + "'httpMethod' must be one of ");
+
             }
 
             boolean hasSettings = control.getLraSettings() != null;
@@ -765,12 +750,12 @@ public class LRAProxy {
             }
 
             if (hasMethodType &&
-                    !List.of(MethodType.COMPENSATE,
-                                    MethodType.COMPLETE,
-                                    MethodType.FORGET,
-                                    MethodType.STATUS,
-                                    MethodType.LEAVE,
-                                    MethodType.AFTER)
+                    !List.of(LRAMethodType.COMPENSATE,
+                                    LRAMethodType.COMPLETE,
+                                    LRAMethodType.FORGET,
+                                    LRAMethodType.STATUS,
+                                    LRAMethodType.LEAVE,
+                                    LRAMethodType.AFTER)
                             .contains(control.getLraMethod())) {
                 throw new RuntimeException(prefix + "Invalid 'lraMethod': " + control.getLraMethod());
             }
@@ -794,11 +779,11 @@ public class LRAProxy {
                 if (rawPath != null) {
                     String normalizedPath = rawPath.startsWith("/") ? rawPath : "/" + rawPath;
 
-                    HttpMethodType method = control.getHttpMethod();
+                    String method = control.getHttpMethod();
                     LRASettings settings = control.getLraSettings();
-                    MethodType methodType = control.getLraMethod();
+                    LRAMethodType LRAMethodType = control.getLraMethod();
 
-                    LRARoute route = new LRARoute(method, settings, methodType);
+                    LRARoute route = new LRARoute(method, settings, LRAMethodType);
                     controlsByPath.put(normalizedPath, route);
                 }
             }

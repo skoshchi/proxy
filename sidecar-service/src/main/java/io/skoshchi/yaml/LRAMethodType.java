@@ -1,6 +1,6 @@
 package io.skoshchi.yaml;
 
-public enum MethodType {
+public enum LRAMethodType {
     COMPENSATE,
     COMPLETE,
     STATUS,

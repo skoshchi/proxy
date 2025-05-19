@@ -1,26 +1,26 @@
 package io.skoshchi;
 
-import io.skoshchi.yaml.HttpMethodType;
 import io.skoshchi.yaml.LRASettings;
-import io.skoshchi.yaml.MethodType;
+import io.skoshchi.yaml.LRAMethodType;
+import jakarta.ws.rs.HttpMethod;
 
 // record
 public class LRARoute {
-    private HttpMethodType httpMethod;
+    private String httpMethod;
     private LRASettings settings;
-    private MethodType methodType;
+    private LRAMethodType methodType;
 
-    public LRARoute(HttpMethodType httpMethod, LRASettings settings, MethodType methodType) {
+    public LRARoute(String httpMethod, LRASettings settings, LRAMethodType methodType) {
         this.httpMethod = httpMethod;
         this.settings = settings;
         this.methodType = methodType;
     }
 
-    public HttpMethodType getHttpMethod() {
+    public String getHttpMethod() {
         return httpMethod;
     }
 
-    public void setHttpMethod(HttpMethodType httpMethod) {
+    public void setHttpMethod(String httpMethod) {
         this.httpMethod = httpMethod;
     }
 
@@ -32,11 +32,11 @@ public class LRARoute {
         this.settings = settings;
     }
 
-    public MethodType getMethodType() {
+    public LRAMethodType getMethodType() {
         return methodType;
     }
 
-    public void setMethodType(MethodType methodType) {
+    public void setMethodType(LRAMethodType methodType) {
         this.methodType = methodType;
     }
 }
