@@ -7,14 +7,14 @@ lra:
     lra-settings:
       type: REQUIRES_NEW
       end: false
-      cancelOnFamily:
+      cancel-on-family:
         - SERVER_ERROR
 
   - path: tck/non-participating-tck-resource/end
     http-method: PUT
     lra-settings:
       type: MANDATORY
-      cancelOnFamily:
+      cancel-on-family:
         - SERVER_ERROR
 
   - path: tck/non-participating-tck-resource/after
@@ -36,7 +36,7 @@ lra:
     http-method: PUT
     lra-settings:
       type: NESTED
-      cancelOnFamily:
+      cancel-on-family:
         - SERVER_ERROR
 
   - path: tck/non-participating-tck-resource/start-nested-and-dont-end
@@ -44,7 +44,7 @@ lra:
     lra-settings:
       type: NESTED
       end: false
-      cancelOnFamily:
+      cancel-on-family:
         - SERVER_ERROR
 
   - path: tck/non-participating-tck-resource/start-via-remote-invocation
@@ -52,7 +52,7 @@ lra:
     lra-settings:
       type: SUPPORTS
       end: false
-      cancelOnFamily:
+      cancel-on-family:
         - SERVER_ERROR
 
 
@@ -120,7 +120,7 @@ lra:
     lra-settings:
       type: MANDATORY
       end: true
-      cancelOnFamily:
+      cancel-on-family:
         - SERVER_ERROR
 
   - path: tck/lraresource/multiLevelNestedActivity
@@ -155,7 +155,7 @@ lra:
     lra-settings:
       type: MANDATORY
       end: false
-      cancelOnFamily:
+      cancel-on-family:
         - SERVER_ERROR
 
   - path: tck/participating-tck-resource/join-with-existing-lra2
@@ -234,21 +234,21 @@ lra:
     http-method: GET
     lra-settings:
       type: REQUIRES_NEW
-      cancelOnFamily:
+      cancel-on-family:
         - REDIRECTION
 
   - path: tck/lraresource-cancelon/cancelOn301
     http-method: GET
     lra-settings:
       type: REQUIRES_NEW
-      cancelOn:
+      cancel-on:
         - MOVED_PERMANENTLY
 
   - path: tck/lraresource-cancelon/notCancelOnFamily5xx
     http-method: GET
     lra-settings:
       type: REQUIRES_NEW
-      cancelOnFamily:
+      cancel-on-family:
         - CLIENT_ERROR
 
   - path: tck/lraresource-cancelon/cancelFromRemoteCall
@@ -303,9 +303,9 @@ lra:
     lra-settings:
       type: REQUIRED
       end: true
-      cancelOnFamily:
+      cancel-on-family:
         - SERVER_ERROR
-      cancelOn:
+      cancel-on:
         - NOT_FOUND
 
   - path: tck/context-tck-resource/completion-stage-exceptionally-lra
@@ -349,7 +349,7 @@ lra:
     http-method: GET
     lra-settings:
       type: REQUIRED
-      cancelOn:
+      cancel-on:
         - INTERNAL_SERVER_ERROR
 
   - path: tck/valid-cs-participant1/enlist-complete
@@ -361,7 +361,7 @@ lra:
     http-method: GET
     lra-settings:
       type: REQUIRED
-      cancelOn:
+      cancel-on:
         - INTERNAL_SERVER_ERROR
 
 

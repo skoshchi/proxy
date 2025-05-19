@@ -78,7 +78,7 @@ public class LRAProxy {
                              @PathParam("path") String path) {
         log.info("--------------- GET -----------------");
         log.info("path: " + path);
-        return handleRequest(httpHeaders, info, "GET", path);
+        return handleRequest(httpHeaders, info, HttpMethodType.GET, path);
     }
 
     @POST
@@ -88,7 +88,7 @@ public class LRAProxy {
                               @PathParam("path") String path) {
         log.info("--------------- POST -----------------");
         log.info("path: " + path);
-        return handleRequest(httpHeaders, info, "POST", path);
+        return handleRequest(httpHeaders, info, HttpMethodType.POST, path);
     }
 
     @PUT
@@ -98,7 +98,7 @@ public class LRAProxy {
                              @PathParam("path") String path) {
         log.info("--------------- PUT -----------------");
         log.info("path: " + path);
-        return handleRequest(httpHeaders, info, "PUT", path);
+        return handleRequest(httpHeaders, info, HttpMethodType.PUT, path);
     }
 
     @DELETE
@@ -108,7 +108,7 @@ public class LRAProxy {
                                 @PathParam("path") String path) {
         log.info("--------------- DELETE -----------------");
         log.info("path: " + path);
-        return handleRequest(httpHeaders, info, "DELETE", path);
+        return handleRequest(httpHeaders, info, HttpMethodType.DELETE, path);
     }
 
     @PATCH
@@ -118,10 +118,10 @@ public class LRAProxy {
                                @PathParam("path") String path) {
         log.info("--------------- PATCH -----------------");
         log.info("path: " + path);
-        return handleRequest(httpHeaders, info, "PATCH", path);
+        return handleRequest(httpHeaders, info, HttpMethodType.PATCH, path);
     }
 
-    public Response handleRequest(HttpHeaders httpHeaders, UriInfo info, String httpMethod, String path) {
+    public Response handleRequest(HttpHeaders httpHeaders, UriInfo info, HttpMethodType httpMethod, String path) {
         path = path.startsWith("/") ? path : "/" + path;
 
         log.info("[handleRequest] " + httpMethod +
@@ -648,7 +648,7 @@ public class LRAProxy {
         b.append(link);
     }
 
-    private Response sendRequest(String httpMethod,
+    private Response sendRequest(HttpMethodType httpMethod,
                                  String path,
                                  MultivaluedMap<String, String> headers,
                                  MultivaluedMap<String, String> queryParameters) {
@@ -674,20 +674,20 @@ public class LRAProxy {
             });
 
 
-            switch (httpMethod.toUpperCase()) {
-                case "GET":
+            switch (httpMethod) {
+                case GET:
                     response = builder.get();
                     break;
-                case "POST":
+                case POST:
                     response = builder.post(null);
                     break;
-                case "PUT":
+                case PUT:
                     response = builder.put(null);
                     break;
-                case "DELETE":
+                case DELETE:
                     response = builder.delete();
                     break;
-                case "PATCH":
+                case PATCH:
                     response = builder.method("PATCH", Entity.text(""));
                     break;
                 default:
