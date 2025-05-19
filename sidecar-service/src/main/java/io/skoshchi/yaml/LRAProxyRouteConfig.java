@@ -7,9 +7,6 @@ public class LRAProxyRouteConfig {
     private LRASettings lraSettings;
     private LRAMethodType lraMethod;
 
-    public LRAProxyRouteConfig() {
-    }
-
     public String getPath() {
         return path;
     }

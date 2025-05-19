@@ -8,8 +8,8 @@ import java.util.Arrays;
 import java.util.List;
 
 public class LRASettings  {
-private LRA.Type type = LRA.Type.REQUIRED;
-    private long timeLimit = 0;
+    private LRA.Type type = LRA.Type.REQUIRED;
+    private Long timeLimit = 0L;
     private ChronoUnit timeUnit = ChronoUnit.SECONDS;
     private boolean end = true;
     private List<Response.Status.Family> cancelOnFamily = Arrays.asList(
@@ -17,9 +17,6 @@ private LRA.Type type = LRA.Type.REQUIRED;
             Response.Status.Family.SERVER_ERROR
     );
     private List<Response.Status> cancelOn;
-
-    public LRASettings () {
-    }
 
     public LRA.Type getType() {
         return type;
@@ -29,11 +26,11 @@ private LRA.Type type = LRA.Type.REQUIRED;
         this.type = type;
     }
 
-    public long getTimeLimit() {
+    public Long getTimeLimit() {
         return timeLimit;
     }
 
-    public void setTimeLimit(long timeLimit) {
+    public void setTimeLimit(Long timeLimit) {
         this.timeLimit = timeLimit;
     }
 

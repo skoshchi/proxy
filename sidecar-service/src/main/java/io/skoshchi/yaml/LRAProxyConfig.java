@@ -8,9 +8,6 @@ public class LRAProxyConfig {
 
     private List<LRAProxyRouteConfig> lra;
 
-    public LRAProxyConfig() {
-    }
-
     public String getUrl() {
         return url;
     }
