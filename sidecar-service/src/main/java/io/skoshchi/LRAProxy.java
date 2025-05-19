@@ -4,10 +4,7 @@ import io.narayana.lra.Current;
 import io.narayana.lra.client.internal.NarayanaLRAClient;
 import io.narayana.lra.logging.LRALogger;
 import io.quarkus.runtime.StartupEvent;
-import io.skoshchi.yaml.LRAProxyConfig;
-import io.skoshchi.yaml.LRAProxyRouteConfig;
-import io.skoshchi.yaml.LRASettings;
-import io.skoshchi.yaml.MethodType;
+import io.skoshchi.yaml.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.ws.rs.*;
@@ -205,7 +202,7 @@ public class LRAProxy {
                 String compensatorId = terminateURIs.get("Link");
                  */
 
-                Map<String, String> terminateURIs = getTerminationUris(getBasePath(path), config.getProxy().getUrl(), timeout);
+                Map<String, String> terminateURIs = getTerminationUris(getBasePath(path), config.getUrl(), timeout);
                 String compensatorId = terminateURIs.get("Link");
 
                 if (compensatorId == null) {
@@ -393,7 +390,7 @@ public class LRAProxy {
                 }
 
                 if (!endAnnotation) { // don't enlist for methods marked with Compensate, Complete or Leave
-                    Map<String, String> terminateURIs = getTerminationUris(getBasePath(path), config.getProxy().getUrl(), timeout);
+                    Map<String, String> terminateURIs = getTerminationUris(getBasePath(path), config.getUrl(), timeout);
 
                     String timeLimitStr = terminateURIs.get(TIMELIMIT_PARAM_NAME);
                     long timeLimit = timeLimitStr == null ? 0L : Long.parseLong(timeLimitStr);
@@ -688,7 +685,7 @@ public class LRAProxy {
         Response response = null;
 
         try {
-            String targetUrl = config.getProxy().getUrl() + path;
+            String targetUrl = config.getUrl() + path;
             WebTarget target = ClientBuilder.newClient()
                     .target(targetUrl);
 
@@ -749,7 +746,7 @@ public class LRAProxy {
         Constructor ctor = new Constructor(LRAProxyConfig.class, loaderOptions);
 
         HyphenToCamelPropertyUtils propUtils = new HyphenToCamelPropertyUtils();
-        propUtils.setSkipMissingProperties(true);   // чтобы игнорировать незнакомые поля
+        propUtils.setSkipMissingProperties(true);
         ctor.setPropertyUtils(propUtils);
 
         Yaml yaml = new Yaml(ctor);
@@ -774,7 +771,7 @@ public class LRAProxy {
 
 
     private boolean isYamlOK(LRAProxyConfig config) throws RuntimeException {
-        List<LRAProxyRouteConfig> controls = config.getProxy().getLra();
+        List<LRAProxyRouteConfig> controls = config.getLra();
         controls.forEach(control -> {
             int index = controls.indexOf(control);
             String prefix = "Error in lraControls[" + index + "]: ";
@@ -783,10 +780,17 @@ public class LRAProxy {
                 throw new RuntimeException(prefix + "'path' is missing or empty");
             }
 
-            if (control.getHttpMethod() == null ||
-                    !List.of("GET", "POST", "PUT", "DELETE", "PATCH").contains(control.getHttpMethod().toUpperCase())) {
-                throw new RuntimeException(prefix + "'httpMethod' must be a valid HTTP method");
+            if (control.getHttpMethod() == null) {
+                throw new RuntimeException(prefix + "'httpMethod' must be defined");
             }
+
+            try {
+                HttpMethodType method = control.getHttpMethod();
+            } catch (IllegalArgumentException e) {
+                throw new RuntimeException(prefix + "'httpMethod' must be one of "
+                        + Arrays.toString(HttpMethodType.values()));
+            }
+
 
             boolean hasSettings = control.getLraSettings() != null;
             boolean hasMethodType = control.getLraMethod() != null;
@@ -823,13 +827,13 @@ public class LRAProxy {
 
     private Map<String, LRARoute> getLraRouteMap() {
         Map<String, LRARoute> controlsByPath = new HashMap<>();
-        if (config != null && config.getProxy() != null && config.getProxy().getLra() != null) {
-            for (LRAProxyRouteConfig control : config.getProxy().getLra()) {
+        if (config != null && config != null && config.getLra() != null) {
+            for (LRAProxyRouteConfig control : config.getLra()) {
                 String rawPath = control.getPath();
                 if (rawPath != null) {
                     String normalizedPath = rawPath.startsWith("/") ? rawPath : "/" + rawPath;
 
-                    String method = control.getHttpMethod();
+                    HttpMethodType method = control.getHttpMethod();
                     LRASettings settings = control.getLraSettings();
                     MethodType methodType = control.getLraMethod();
 

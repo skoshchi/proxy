@@ -1,23 +1,36 @@
 package io.skoshchi.yaml;
 
+import java.util.List;
+
 public class LRAProxyConfig {
-    private LRAProxySettings LRAProxySettings;
+    private String url;
+
+    private List<LRAProxyRouteConfig> lra;
 
     public LRAProxyConfig() {
     }
 
-    public LRAProxySettings getProxy() {
-        return LRAProxySettings;
+    public String getUrl() {
+        return url;
     }
 
-    public void setProxy(LRAProxySettings LRAProxySettings) {
-        this.LRAProxySettings = LRAProxySettings;
+    public void setUrl(String url) {
+        this.url = url;
+    }
+
+    public List<LRAProxyRouteConfig> getLra() {
+        return lra;
+    }
+
+    public void setLra(List<LRAProxyRouteConfig> lra) {
+        this.lra = lra;
     }
 
     @Override
     public String toString() {
-        return "LRAProxyConfigFile{" +
-                "proxy=" + LRAProxySettings +
+        return "LRAProxyConfig{" +
+                "url='" + url + '\'' +
+                ", lra=" + lra +
                 '}';
     }
 }

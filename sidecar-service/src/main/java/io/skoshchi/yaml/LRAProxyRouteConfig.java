@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public class LRAProxyRouteConfig {
     private String path;
 
-    private String httpMethod;
+    private HttpMethodType httpMethod;
     private LRASettings lraSettings;
     private MethodType lraMethod;
 
@@ -20,11 +20,11 @@ public class LRAProxyRouteConfig {
         this.path = path;
     }
 
-    public String getHttpMethod() {
+    public HttpMethodType getHttpMethod() {
         return httpMethod;
     }
 
-    public void setHttpMethod(String httpMethod) {
+    public void setHttpMethod(HttpMethodType httpMethod) {
         this.httpMethod = httpMethod;
     }
 
