@@ -2,6 +2,7 @@ proxy:
   url: http://127.0.0.1:8180
   lra:
     # NonParticipatingTckResource
+
     - path: tck/non-participating-tck-resource/start-dont-end
       method: PUT
       lraSettings:
@@ -148,7 +149,8 @@ proxy:
         timeLimit: 500
         timeUnit: MILLIS
 
-#    participating-tck-resource
+      # ParticipatingTckResource
+
     - path: tck/participating-tck-resource/join-with-existing-lra
       method: PUT
       lraSettings:
@@ -264,6 +266,7 @@ proxy:
       lraMethod: COMPENSATE
 
     # ContextTckResource
+
     - path: tck/context-tck-resource/new-lra
       method: PUT
       lraSettings:
@@ -439,7 +442,12 @@ proxy:
         type: NEVER
         end: false
 
-  # LRATypeTckInterface
+    - path: tck/lra-type-tck-resource/after
+      method: PUT
+      lraMethod: AFTER
+
+    # LRATypeTckInterface
+
     - path: tck/lra-type-tck-interface-resource/required
       method: GET
       lraSettings:
@@ -488,6 +496,12 @@ proxy:
         type: SUPPORTS
         end: false
 
+    - path: tck/lra-type-tck-interface-resource/end-mandatory
+      method: GET
+      lraSettings:
+        type: MANDATORY
+        end: false
+
     - path: tck/lra-type-tck-interface-resource/end-not-supported
       method: GET
       lraSettings:
@@ -500,7 +514,12 @@ proxy:
         type: NEVER
         end: false
 
+    - path: tck/lra-type-tck-interface-resource/after
+      method: PUT
+      lraMethod: AFTER
+
       # LRATypeTckSuperclass
+
     - path: tck/lra-type-tck-superclass-resource/required
       method: GET
       lraSettings:
@@ -520,6 +539,12 @@ proxy:
       method: GET
       lraSettings:
         type: SUPPORTS
+
+    - path: tck/lra-type-tck-superclass-resource/end-mandatory
+      method: GET
+      lraSettings:
+        type: MANDATORY
+        end: false
 
     - path: tck/lra-type-tck-superclass-resource/not-supported
       method: GET
@@ -561,7 +586,12 @@ proxy:
         type: NEVER
         end: false
 
+    - path: tck/lra-type-tck-superclass-resource/after
+      method: PUT
+      lraMethod: AFTER
+
     # RecoveryResource
+
     - path: tck/recovery-resource/required
       method: PUT
       lraSettings:
@@ -584,7 +614,8 @@ proxy:
       method: PUT
       lraMethod: AFTER
 
-  # LRAUnknownResource
+    # LRAUnknownResource
+
     - path: tck/lraUnknownController/work
       method: PUT
       lraSettings:
