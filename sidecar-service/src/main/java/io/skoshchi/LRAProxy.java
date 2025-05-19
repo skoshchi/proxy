@@ -50,8 +50,6 @@ public class LRAProxy {
     @Context
     protected ResourceInfo resourceInfo;
 
-    @ConfigProperty(name = "quarkus.lra.coordinator-url")
-    String coordinatorUrl;
 
     NarayanaLRAClient narayanaLRAClient;
 
@@ -68,7 +66,7 @@ public class LRAProxy {
         }
         lraRouteMap = getLraRouteMap();
 
-        narayanaLRAClient = new NarayanaLRAClient(URI.create(coordinatorUrl));
+        narayanaLRAClient = new NarayanaLRAClient(URI.create(config.getCoordinatorUrl()));
     }
 
     @GET
@@ -131,7 +129,6 @@ public class LRAProxy {
         Method method = resourceInfo.getResourceMethod();
         MultivaluedMap<String, String> headers = new MultivaluedHashMap<>(httpHeaders.getRequestHeaders());
         MultivaluedMap<String, String> queryParameters = info.getQueryParameters();
-
 
         if (lraProxyRouteConfig == null) {
             // no-op

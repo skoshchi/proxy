@@ -4,6 +4,7 @@ import java.util.List;
 
 public class LRAProxyConfig {
     private String url;
+    private String coordinatorUrl;
 
     private List<LRAProxyRouteConfig> lra;
 
@@ -26,10 +27,19 @@ public class LRAProxyConfig {
         this.lra = lra;
     }
 
+    public String getCoordinatorUrl() {
+        return coordinatorUrl;
+    }
+
+    public void setCoordinatorUrl(String coordinatorUrl) {
+        this.coordinatorUrl = coordinatorUrl;
+    }
+
     @Override
     public String toString() {
         return "LRAProxyConfig{" +
                 "url='" + url + '\'' +
+                ", coordinatorUrl='" + coordinatorUrl + '\'' +
                 ", lra=" + lra +
                 '}';
     }
