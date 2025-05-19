@@ -149,7 +149,7 @@ proxy:
         timeLimit: 500
         timeUnit: MILLIS
 
-      # ParticipatingTckResource
+    # ParticipatingTckResource
 
     - path: tck/participating-tck-resource/join-with-existing-lra
       method: PUT
@@ -369,10 +369,15 @@ proxy:
     # LongBusinessMethodParticipant
 
     - path: tck/long-business-participant/business-method
-      method: GET
+      method: PUT
       lraSettings:
         type: MANDATORY
         end: false
+
+    # modified in the TCK to make this a JAX-RS method
+    - path: tck/long-business-participant/compensate
+      method: PUT
+      lraMethod: COMPENSATE
 
     # LRATypeTckResource
 
@@ -518,7 +523,7 @@ proxy:
       method: PUT
       lraMethod: AFTER
 
-      # LRATypeTckSuperclass
+    # LRATypeTckSuperclass
 
     - path: tck/lra-type-tck-superclass-resource/required
       method: GET
@@ -623,11 +628,38 @@ proxy:
 
     - path: tck/lraUnknownController/complete
       method: PUT
-      lraMethod: AFTER
+      lraMethod: COMPLETE
 
     - path: tck/lraUnknownController/compensate
       method: PUT
       lraMethod: COMPENSATE
+
+    - path: tck/lraUnknownController/after
+      method: PUT
+      lraMethod: AFTER
+
+    # LRAUnknownStatusResource
+
+    - path: tck/lraUnknownStatusController/work
+      method: PUT
+      lraSettings:
+        type: REQUIRED
+
+    - path: tck/lraUnknownStatusController/complete
+      method: PUT
+      lraMethod: COMPLETE
+
+    - path: tck/lraUnknownStatusController/compensate
+      method: PUT
+      lraMethod: COMPENSATE
+
+    - path: tck/lraUnknownStatusController/status
+      method: GET
+      lraMethod: STATUS
+
+    - path: tck/lraUnknownStatusController/after
+      method: PUT
+      lraMethod: AFTER
 
 
 #    - path: /complete
