@@ -2,12 +2,10 @@ package io.skoshchi.yaml;
 
 public class LRAProxyRouteConfig {
     private String path;
-    private String method;
-    private LRASettings lraSettings;
-    private MethodType lraMethod;
 
-    public LRAProxyRouteConfig() {
-    }
+    private String httpMethod;
+    private LRASettings lraSettings;
+    private LRAMethodType lraMethod;
 
     public String getPath() {
         return path;
@@ -17,12 +15,12 @@ public class LRAProxyRouteConfig {
         this.path = path;
     }
 
-    public String getMethod() {
-        return method;
+    public String getHttpMethod() {
+        return httpMethod;
     }
 
-    public void setMethod(String method) {
-        this.method = method;
+    public void setHttpMethod(String httpMethod) {
+        this.httpMethod = httpMethod;
     }
 
     public LRASettings getLraSettings() {
@@ -33,11 +31,11 @@ public class LRAProxyRouteConfig {
         this.lraSettings = lraSettings;
     }
 
-    public MethodType getLraMethod() {
+    public LRAMethodType getLraMethod() {
         return lraMethod;
     }
 
-    public void setLraMethod(MethodType lraMethod) {
+    public void setLraMethod(LRAMethodType lraMethod) {
         this.lraMethod = lraMethod;
     }
 
@@ -45,7 +43,7 @@ public class LRAProxyRouteConfig {
     public String toString() {
         return "LRAProxy{" +
                 "path='" + path + '\'' +
-                ", method='" + method + '\'' +
+                ", httpMethod='" + httpMethod + '\'' +
                 ", lraSettings=" + lraSettings +
                 ", lraMethod=" + lraMethod +
                 '}';

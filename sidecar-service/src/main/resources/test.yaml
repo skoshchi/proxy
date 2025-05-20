@@ -1,212 +1,662 @@
-proxy:
-  url: http://127.0.0.1:8180
-  lra:
-    # NonParticipatingTckResource
-    - path: tcktests/non-participating-tck-resource/start-dont-end
-      method: PUT
-      lraSettings:
-        type: REQUIRES_NEW
-        end: false
-        cancelOnFamily:
-          - SERVER_ERROR
+url: http://127.0.0.1:8180
+lra-coordinator-url: http://127.0.0.1:8080/lra-coordinator/lra-coordinator
+lra:
+  # NonParticipatingTckResource
 
-    - path: tcktests/non-participating-tck-resource/end
-      method: PUT
-      lraSettings:
-        type: MANDATORY
-        cancelOnFamily:
-          - SERVER_ERROR
+  - path: tck/non-participating-tck-resource/start-dont-end
+    http-method: PUT
+    lra-settings:
+      type: REQUIRES_NEW
+      end: false
+      cancel-on-family:
+        - SERVER_ERROR
 
-    - path: tcktests/non-participating-tck-resource/after
-      method: PUT
-      lraMethod: AFTER
+  - path: tck/non-participating-tck-resource/end
+    http-method: PUT
+    lra-settings:
+      type: MANDATORY
+      cancel-on-family:
+        - SERVER_ERROR
 
-#    - path: non-participating-tck-resource/never
-#      method: PUT
-#      lraSettings:
-#        type: NEVER
-#
-#    - path: non-participating-tck-resource/supports
-#      method: PUT
-#      lraSettings:
-#        type: SUPPORTS
-#        end: false
-#
-#    - path: non-participating-tck-resource/start-and-end
-#      method: PUT
-#      lraSettings:
-#        type: REQUIRES_NEW
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
-#    - path: non-participating-tck-resource/start-nested-and-end
-#      method: PUT
-#      lraSettings:
-#        type: NESTED
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
-#    - path: non-participating-tck-resource/start-nested-and-dont-end
-#      method: PUT
-#      lraSettings:
-#        type: NESTED
-#        end: false
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
-#    - path: non-participating-tck-resource/start-via-remote-invocation
-#      method: PUT
-#      lraSettings:
-#        type: SUPPORTS
-#        end: false
-#        cancelOnFamily:
-#          - SERVER_ERROR
+  - path: tck/non-participating-tck-resource/after
+    http-method: PUT
+    lra-method: AFTER
 
-    # LraResource
-#    - path: lraresource/status
-#      method: GET
-#      lraMethod: STATUS
-#
-#    - path: lraresource/leave
-#      method: PUT
-#      lraMethod: LEAVE
-#
-    - path: tcktests/lraresource/complete
-      method: PUT
-      lraMethod: COMPLETE
+  - path: tck/non-participating-tck-resource/never
+    http-method: PUT
+    lra-settings:
+      type: NEVER
 
-    - path: tcktests/lraresource/compensate
-      method: PUT
-      lraMethod: COMPENSATE
+  - path: tck/non-participating-tck-resource/supports
+    http-method: PUT
+    lra-settings:
+      type: SUPPORTS
+      end: false
 
-    - path: tcktests/lraresource/after
-      method: PUT
-      lraMethod: AFTER
+  - path: tck/non-participating-tck-resource/start-nested-and-end
+    http-method: PUT
+    lra-settings:
+      type: NESTED
+      cancel-on-family:
+        - SERVER_ERROR
 
-#    - path: lraresource/forget
-#      method: DELETE
-#      lraMethod: FORGET
-#
-#    - path: lraresource/acceptWork
-#      method: PUT
-#      lraSettings:
-#        type: REQUIRED
-#        end: false
-#
-#    - path: lraresource/supports
-#      method: PUT
-#      lraSettings:
-#        type: SUPPORTS
-#        end: false
-#
-#    - path: lraresource/startViaApi
-#      method: PUT
-#      lraSettings:
-#        type: NOT_SUPPORTED
-#
-#    - path: lraresource/work
-#      method: PUT
-#      lraSettings:
-#        type: REQUIRED
-#        end: false
-#
-#    - path: lraresource/mandatory
-#      method: PUT
-#      lraSettings:
-#        type: MANDATORY
-#        end: false
-#
-    - path: tcktests/lraresource/nestedActivity
-      method: PUT
-      lraSettings:
-        type: NESTED
-        end: true
-#
-#    - path: lraresource/cancel
-#      method: PUT
-#      lraSettings:
-#        type: MANDATORY
-#        end: true
-#        cancelOnFamily:
-#          - SERVER_ERROR
-#
-    - path: tcktests/lraresource/multiLevelNestedActivity
-      method: PUT
-      lraSettings:
-        type: NESTED
-        end: false
+  - path: tck/non-participating-tck-resource/start-nested-and-dont-end
+    http-method: PUT
+    lra-settings:
+      type: NESTED
+      end: false
+      cancel-on-family:
+        - SERVER_ERROR
+
+  - path: tck/non-participating-tck-resource/start-via-remote-invocation
+    http-method: PUT
+    lra-settings:
+      type: SUPPORTS
+      end: false
+      cancel-on-family:
+        - SERVER_ERROR
 
 
-#    - path: /complete
-#      method: PUT
-#      lraMethod: COMPLETE
-#
-#    - path: /compensate
-#      method: PUT
-#      lraMethod: COMPENSATE
+  - path: tck/lraresource/status
+    http-method: GET
+    lra-method: STATUS
 
-#    - path: /non-participating-tck-resource
-#      method: PUT
-#      lraSettings:
-#        type: SUPPORTS
-#        end: false
+  - path: tck/lraresource/leave
+    http-method: PUT
+    lra-method: LEAVE
 
-#   this is hotel
-#
-#    - path: start-order-2
-#      method: GET
-#      lraSettings:
-#        type: REQUIRED
-#        end: false
-#
-#    - path: start-nested-order
-#      method: "GET"
-#      lraSettings:
-#        type: NESTED
-#        end: false
-#
-#    - path: never-order
-#      method: "GET"
-#      lraSettings:
-#        type: NEVER
-#        end: false
-#
-#    - path: mandatory-order
-#      method: "GET"
-#      lraSettings:
-#        type: MANDATORY
-#        end: false
-#
-#    - path: supports-order
-#      method: "GET"
-#      lraSettings:
-#        type: SUPPORTS
-#        end: false
-#
-#    - path: not-supported-order
-#      method: "GET"
-#      lraSettings:
-#        type: NOT_SUPPORTED
-#        end: false
-#
-#    # Participants of compensation
-#    - path: complete
-#      method: POST
-#      lraMethod: COMPLETE
-#
-#    - path: compensate
-#      method: POST
-#      lraMethod: COMPENSATE
-#
-#    - path: forget
-#      method: POST
-#      lraMethod: FORGET
-#
-#    - path: leave
-#      method: GET
-#      lraMethod: LEAVE
-#
-#    - path: status
-#      method: GET
-#      lraMethod: STATUS
-#
+  - path: tck/lraresource/complete
+    http-method: PUT
+    lra-method: COMPLETE
+
+  - path: tck/lraresource/compensate
+    http-method: PUT
+    lra-method: COMPENSATE
+
+  - path: tck/lraresource/after
+    http-method: PUT
+    lra-method: AFTER
+
+  - path: tck/lraresource/forget
+    http-method: DELETE
+    lra-method: FORGET
+
+  - path: tck/lraresource/acceptWork
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+      end: false
+
+  - path: tck/lraresource/supports
+    http-method: PUT
+    lra-settings:
+      type: SUPPORTS
+      end: false
+
+  - path: tck/lraresource/startViaApi
+    http-method: PUT
+    lra-settings:
+      type: NOT_SUPPORTED
+
+  - path: tck/lraresource/work
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+      end: false
+
+  - path: tck/lraresource/mandatory
+    http-method: PUT
+    lra-settings:
+      type: MANDATORY
+      end: false
+
+  - path: tck/lraresource/nestedActivity
+    http-method: PUT
+    lra-settings:
+      type: NESTED
+      end: true
+
+  - path: tck/lraresource/cancel
+    http-method: PUT
+    lra-settings:
+      type: MANDATORY
+      end: true
+      cancel-on-family:
+        - SERVER_ERROR
+
+  - path: tck/lraresource/multiLevelNestedActivity
+    http-method: PUT
+    lra-settings:
+      type: MANDATORY
+      end: false
+
+  - path: tck/lraresource/startViaApi
+    http-method: PUT
+    lra-settings:
+      type: NOT_SUPPORTED
+
+  - path: tck/lraresource/timeLimit
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+      time-limit: 500
+      time-unit: MILLIS
+
+  - path: tck/lraresource/timeLimit2
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+      time-limit: 500
+      time-unit: MILLIS
+
+  # ParticipatingTckResource
+
+  - path: tck/participating-tck-resource/join-with-existing-lra
+    http-method: PUT
+    lra-settings:
+      type: MANDATORY
+      end: false
+      cancel-on-family:
+        - SERVER_ERROR
+
+  - path: tck/participating-tck-resource/join-with-existing-lra2
+    http-method: PUT
+    lra-settings:
+      type: MANDATORY
+      end: false
+
+  - path: tck/participating-tck-resource/compensate
+    http-method: PUT
+    lra-method: COMPENSATE
+
+  - path: tck/participating-tck-resource/complete
+    http-method: PUT
+    lra-method: COMPLETE
+
+  - path: tck/participating-tck-resource/accept
+    http-method: PUT
+    lra-settings:
+      type: REQUIRES_NEW
+
+  - path: tck/participating-tck-resource/leave
+    http-method: PUT
+    lra-settings:
+      type: SUPPORTS
+      end: false
+    lra-method: LEAVE
+
+  - path: tck/participating-tck-resource/join-with-new-LRA
+    http-method: PUT
+    lra-settings:
+      type: REQUIRES_NEW
+      end: false
+
+  - path: tck/after-lra-listener/work
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+      end: false
+
+  - path: tck/after-lra-listener/after
+    http-method: PUT
+    lra-method: AFTER
+
+  - path: tck/after-lra-participant/work
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+      end: false
+
+  - path: tck/after-lra-participant/after
+    http-method: PUT
+    lra-method: AFTER
+
+  - path: tck/after-lra-participant/compensate
+    http-method: PUT
+    lra-method: COMPENSATE
+
+  - path: tck/after-lra-participant/complete
+    http-method: PUT
+    lra-method: COMPLETE
+
+  # LraCancelOnResource
+
+  - path: tck/lraresource-cancelon/cancelOnFamilyDefault4xx
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/lraresource-cancelon/cancelOnFamilyDefault5xx
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/lraresource-cancelon/cancelOnFamily3xx
+    http-method: GET
+    lra-settings:
+      type: REQUIRES_NEW
+      cancel-on-family:
+        - REDIRECTION
+
+  - path: tck/lraresource-cancelon/cancelOn301
+    http-method: GET
+    lra-settings:
+      type: REQUIRES_NEW
+      cancel-on:
+        - MOVED_PERMANENTLY
+
+  - path: tck/lraresource-cancelon/notCancelOnFamily5xx
+    http-method: GET
+    lra-settings:
+      type: REQUIRES_NEW
+      cancel-on-family:
+        - CLIENT_ERROR
+
+  - path: tck/lraresource-cancelon/cancelFromRemoteCall
+    http-method: GET
+    lra-settings:
+      type: REQUIRES_NEW
+
+  - path: tck/lraresource-cancelon/complete
+    http-method: PUT
+    lra-method: COMPLETE
+
+  - path: tck/lraresource-cancelon/compensate
+    http-method: PUT
+    lra-method: COMPENSATE
+
+  # ContextTckResource
+
+  - path: tck/context-tck-resource/new-lra
+    http-method: PUT
+    lra-settings:
+      type: REQUIRES_NEW
+      end: false
+
+  - path: tck/context-tck-resource/required-lra
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/context-tck-resource/requires-new-lra
+    http-method: PUT
+    lra-settings:
+      type: REQUIRES_NEW
+
+  - path: tck/context-tck-resource/nested-lra
+    http-method: PUT
+    lra-settings:
+      type: NESTED
+      end: false
+
+  - path: tck/context-tck-resource/nested-lra-with-close
+    http-method: PUT
+    lra-settings:
+      type: NESTED
+
+  - path: tck/context-tck-resource/context-check-lra
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/context-tck-resource/completion-stage-lra
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+      end: true
+      cancel-on-family:
+        - SERVER_ERROR
+      cancel-on:
+        - NOT_FOUND
+
+  - path: tck/context-tck-resource/completion-stage-exceptionally-lra
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/context-tck-resource/leave
+    http-method: PUT
+    lra-method: LEAVE
+
+  - path: tck/context-tck-resource/compensate
+    http-method: PUT
+    lra-method: COMPENSATE
+
+  - path: tck/context-tck-resource/complete
+    http-method: PUT
+    lra-method: COMPLETE
+
+  - path: tck/context-tck-resource/status
+    http-method: GET
+    lra-method: STATUS
+
+  - path: tck/context-tck-resource/forget
+    http-method: DELETE
+    lra-method: FORGET
+
+  - path: tck/context-tck-resource/async-response-lra
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+
+  # ValidLRAParticipant
+
+  - path: tck/valid-nonjaxrs/nonjaxrs-enlist-complete
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/valid-nonjaxrs/nonjaxrs-enlist-compensate
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+      cancel-on:
+        - INTERNAL_SERVER_ERROR
+
+  - path: tck/valid-cs-participant1/enlist-complete
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/valid-cs-participant1/enlist-complete
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+      cancel-on:
+        - INTERNAL_SERVER_ERROR
+
+
+  # LongBusinessMethodParticipant
+
+  - path: tck/long-business-participant/business-http-method
+    http-method: PUT
+    lra-settings:
+      type: MANDATORY
+      end: false
+
+  # modified in the TCK to make this a JAX-RS http-method
+  - path: tck/long-business-participant/compensate
+    http-method: PUT
+    lra-method: COMPENSATE
+
+  # LRATypeTckResource
+
+  - path: tck/lra-type-tck-resource/required
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/lra-type-tck-resource/requires-new
+    http-method: GET
+    lra-settings:
+      type: REQUIRES_NEW
+
+  - path: tck/lra-type-tck-resource/mandatory
+    http-method: GET
+    lra-settings:
+      type: MANDATORY
+
+  - path: tck/lra-type-tck-resource/supports
+    http-method: GET
+    lra-settings:
+      type: SUPPORTS
+
+  - path: tck/lra-type-tck-resource/not-supported
+    http-method: GET
+    lra-settings:
+      type: NOT_SUPPORTED
+
+  - path: tck/lra-type-tck-resource/never
+    http-method: GET
+    lra-settings:
+      type: NEVER
+
+  - path: tck/lra-type-tck-resource/end-required
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+      end: false
+
+  - path: tck/lra-type-tck-resource/end-requires-new
+    http-method: GET
+    lra-settings:
+      type: REQUIRES_NEW
+      end: false
+
+  - path: tck/lra-type-tck-resource/end-mandatory
+    http-method: GET
+    lra-settings:
+      type: MANDATORY
+      end: false
+
+  - path: tck/lra-type-tck-resource/end-supports
+    http-method: GET
+    lra-settings:
+      type: SUPPORTS
+      end: false
+
+  - path: tck/lra-type-tck-resource/end-not-supported
+    http-method: GET
+    lra-settings:
+      type: NOT_SUPPORTED
+      end: false
+
+  - path: tck/lra-type-tck-resource/end-never
+    http-method: GET
+    lra-settings:
+      type: NEVER
+      end: false
+
+  - path: tck/lra-type-tck-resource/after
+    http-method: PUT
+    lra-method: AFTER
+
+  # LRATypeTckInterface
+
+  - path: tck/lra-type-tck-interface-resource/required
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/lra-type-tck-interface-resource/requires-new
+    http-method: GET
+    lra-settings:
+      type: REQUIRES_NEW
+
+  - path: tck/lra-type-tck-interface-resource/mandatory
+    http-method: GET
+    lra-settings:
+      type: MANDATORY
+
+  - path: tck/lra-type-tck-interface-resource/supports
+    http-method: GET
+    lra-settings:
+      type: SUPPORTS
+
+  - path: tck/lra-type-tck-interface-resource/not-supported
+    http-method: GET
+    lra-settings:
+      type: NOT_SUPPORTED
+
+  - path: tck/lra-type-tck-interface-resource/never
+    http-method: GET
+    lra-settings:
+      type: NEVER
+
+  - path: tck/lra-type-tck-interface-resource/end-required
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+      end: false
+
+  - path: tck/lra-type-tck-interface-resource/end-requires-new
+    http-method: GET
+    lra-settings:
+      type: REQUIRES_NEW
+      end: false
+
+  - path: tck/lra-type-tck-interface-resource/end-supports
+    http-method: GET
+    lra-settings:
+      type: SUPPORTS
+      end: false
+
+  - path: tck/lra-type-tck-interface-resource/end-mandatory
+    http-method: GET
+    lra-settings:
+      type: MANDATORY
+      end: false
+
+  - path: tck/lra-type-tck-interface-resource/end-not-supported
+    http-method: GET
+    lra-settings:
+      type: NOT_SUPPORTED
+      end: false
+
+  - path: tck/lra-type-tck-interface-resource/end-never
+    http-method: GET
+    lra-settings:
+      type: NEVER
+      end: false
+
+  - path: tck/lra-type-tck-interface-resource/after
+    http-method: PUT
+    lra-method: AFTER
+
+  # LRATypeTckSuperclass
+
+  - path: tck/lra-type-tck-superclass-resource/required
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/lra-type-tck-superclass-resource/requires-new
+    http-method: GET
+    lra-settings:
+      type: REQUIRES_NEW
+
+  - path: tck/lra-type-tck-superclass-resource/mandatory
+    http-method: GET
+    lra-settings:
+      type: MANDATORY
+
+  - path: tck/lra-type-tck-superclass-resource/supports
+    http-method: GET
+    lra-settings:
+      type: SUPPORTS
+
+  - path: tck/lra-type-tck-superclass-resource/end-mandatory
+    http-method: GET
+    lra-settings:
+      type: MANDATORY
+      end: false
+
+  - path: tck/lra-type-tck-superclass-resource/not-supported
+    http-method: GET
+    lra-settings:
+      type: NOT_SUPPORTED
+
+  - path: tck/lra-type-tck-superclass-resource/never
+    http-method: GET
+    lra-settings:
+      type: NEVER
+
+  - path: tck/lra-type-tck-superclass-resource/end-required
+    http-method: GET
+    lra-settings:
+      type: REQUIRED
+      end: false
+
+  - path: tck/lra-type-tck-superclass-resource/end-requires-new
+    http-method: GET
+    lra-settings:
+      type: REQUIRES_NEW
+      end: false
+
+  - path: tck/lra-type-tck-superclass-resource/end-supports
+    http-method: GET
+    lra-settings:
+      type: SUPPORTS
+      end: false
+
+  - path: tck/lra-type-tck-superclass-resource/end-not-supported
+    http-method: GET
+    lra-settings:
+      type: NOT_SUPPORTED
+      end: false
+
+  - path: tck/lra-type-tck-superclass-resource/end-never
+    http-method: GET
+    lra-settings:
+      type: NEVER
+      end: false
+
+  - path: tck/lra-type-tck-superclass-resource/after
+    http-method: PUT
+    lra-method: AFTER
+
+  # RecoveryResource
+
+  - path: tck/recovery-resource/required
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+      end: false
+
+  - path: tck/recovery-resource/required-timeout
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+      end: false
+      time-limit: 500
+      time-unit: MILLIS
+
+  - path: tck/recovery-resource/compensate
+    http-method: PUT
+    lra-method: COMPENSATE
+
+  - path: tck/recovery-resource/after
+    http-method: PUT
+    lra-method: AFTER
+
+  # LRAUnknownResource
+
+  - path: tck/lraUnknownController/work
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/lraUnknownController/complete
+    http-method: PUT
+    lra-method: COMPLETE
+
+  - path: tck/lraUnknownController/compensate
+    http-method: PUT
+    lra-method: COMPENSATE
+
+  - path: tck/lraUnknownController/after
+    http-method: PUT
+    lra-method: AFTER
+
+  # LRAUnknownStatusResource
+
+  - path: tck/lraUnknownStatusController/work
+    http-method: PUT
+    lra-settings:
+      type: REQUIRED
+
+  - path: tck/lraUnknownStatusController/complete
+    http-method: PUT
+    lra-method: COMPLETE
+
+  - path: tck/lraUnknownStatusController/compensate
+    http-method: PUT
+    lra-method: COMPENSATE
+
+  - path: tck/lraUnknownStatusController/status
+    http-method: GET
+    lra-method: STATUS
+
+  - path: tck/lraUnknownStatusController/after
+    http-method: PUT
+    lra-method: AFTER
